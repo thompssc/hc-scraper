@@ -1,0 +1,94 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowLazyLoadImages = (function () {
+    const CLASS_NAME_LAZY_JS_IMAGE = 'lazy-js-image';
+    const SELECTOR_LAZY_JS_IMAGE = `.${CLASS_NAME_LAZY_JS_IMAGE}`;
+
+    class LazyLoadImages {
+        init() {
+            const imageElms = document.querySelectorAll(SELECTOR_LAZY_JS_IMAGE);
+            if (imageElms.length === 0) return;
+            HappycowObserverIntersection.observeElements(imageElms);
+
+            addLiveEventListener('intersection.visible', 'body', (e) => {
+                const { target } = e.detail;
+                if (target.classList.contains(CLASS_NAME_LAZY_JS_IMAGE)) {
+                    this.setImage(target);
+                }
+            });
+        }
+
+        setLazyLoadObserve(selector, multipleElements = true) {
+            if (!selector) return;
+            if (!multipleElements) {
+                HappycowObserverIntersection.observeSingleElement(`${selector} ${SELECTOR_LAZY_JS_IMAGE}`);
+                return;
+            }
+            HappycowObserverIntersection.observeElements(`${selector} ${SELECTOR_LAZY_JS_IMAGE}`);
+        }
+
+        setImage(targetEl) {
+            if (!targetEl) return;
+
+            const { backgroundImage, src, srcset } = targetEl.dataset;
+
+            if (backgroundImage) {
+                targetEl.style = `background-image: url('${backgroundImage}');`;
+                return;
+            }
+
+            const pictureEl = targetEl.closest('picture');
+            if (pictureEl) {
+                this._setPictureSrc(pictureEl);
+                return;
+            }
+
+            if (src) {
+                this._setImageSrc(targetEl, src);
+            }
+
+            if (srcset) {
+                this._setImageSrcset(targetEl, srcset);
+            }
+        }
+
+        _setImageSrc(targetEl, src) {
+            if (targetEl.src === src) return;
+            targetEl.src = src;
+        }
+
+        _setImageSrcset(targetEl, srcset) {
+            if (targetEl.srcset === srcset) return;
+            targetEl.srcset = srcset;
+        }
+
+        _setPictureSrc(targetEl) {
+            const sourceElms = targetEl.querySelectorAll('source');
+            if (sourceElms.length === 0) return;
+
+            const { innerWidth } = window;
+
+            for (const sourceEl of sourceElms) {
+                const imgEl = targetEl.querySelector('img');
+                if (!imgEl) return;
+
+                const { minWidth, maxWidth, src } = sourceEl.dataset;
+                if (!src) return;
+
+                if (minWidth && !maxWidth && innerWidth >= minWidth) {
+                    this._setImageSrc(imgEl, src);
+                    return;
+                }
+                if (!minWidth && maxWidth && innerWidth <= maxWidth) {
+                    this._setImageSrc(imgEl, src);
+                }
+            }
+        }
+    }
+
+    return LazyLoadImages;
+})();

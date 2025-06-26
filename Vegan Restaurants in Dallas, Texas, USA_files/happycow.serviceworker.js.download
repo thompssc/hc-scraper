@@ -1,0 +1,93 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowServiceWorker = (function () {
+    const applicationServerKey = 'BAsT2B93nAsg-r59-tu0WHKPtKsPb6FoGcsr866F6QE9jZJJ2uRO5TceYsZfpD95yyPIs2RjsvYADmLvLe0kHQk';
+
+    class ServiceWorker {
+        register(name, scope) {
+            return new Promise((resolve, reject) => {
+                if (!('serviceWorker' in navigator)) {
+                    return reject();
+                }
+
+                navigator.serviceWorker
+                    .register(name, { scope: scope })
+                    .then((swReg) => {
+                        return resolve(swReg);
+                    })
+                    .catch((err) => {
+                        return resolve(null);
+                    });
+            });
+        }
+
+        subscribe() {
+            return new Promise((resolve, reject) => {
+                if (!('serviceWorker' in navigator)) {
+                    return reject();
+                }
+
+                if (!('PushManager' in window)) {
+                    return reject;
+                }
+
+                navigator.serviceWorker.ready
+                    .then((serviceWorkerRegistration) => {
+                        serviceWorkerRegistration.pushManager
+                            .subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: this._urlBase64ToUint8Array(applicationServerKey),
+                            })
+                            .then((subscription) => {
+                                return resolve(subscription);
+                            });
+                    })
+                    .catch((e) => {
+                        return reject(e);
+                    });
+            });
+        }
+
+        subscriptionStatus() {
+            return new Promise((resolve, reject) => {
+                if (!('serviceWorker' in navigator)) {
+                    return reject();
+                }
+
+                if (!('PushManager' in window)) {
+                    return reject();
+                }
+
+                navigator.serviceWorker.ready
+                    .then((serviceWorkerRegistration) => {
+                        serviceWorkerRegistration.pushManager.getSubscription();
+                    })
+                    .then((subscription) => {
+                        return resolve(subscription);
+                    })
+                    .catch((e) => {
+                        return reject(e);
+                    });
+            });
+        }
+
+        _urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            // eslint-disable-next-line
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+    }
+
+    return ServiceWorker;
+})();

@@ -1,0 +1,1 @@
+web: gunicorn cloud_scraper_service:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 

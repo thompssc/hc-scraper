@@ -1,0 +1,18 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+// eslint-disable-next-line no-underscore-dangle
+window.__gcse = {
+    callback: googleCSELoaded,
+};
+
+function googleCSELoaded() {
+    addOnEventListener('click', '#customSearch', () => {
+        const searchText = document.querySelector('#customSearchText').value;
+        const element = google.search.cse.element.getElement('searchOnlyCSE');
+        element.execute(searchText);
+    });
+}

@@ -1,0 +1,112 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowNoticeBar = (function () {
+    const CLASS_NAME_NOTICE_BAR_VISIBLE = 'notice-bar-visible';
+
+    const SELECTOR_NOTICE_BAR = '#notice-bar';
+
+    const defaultOptions = {
+        text: '',
+        link: '/',
+        linkText: 'View More',
+        linkClose: true,
+        cookieName: '',
+        cookieExpires: 1,
+        cssBgClass: 'bg-primary-500',
+        cssCustomClass: '',
+        showOnce: false,
+        deadlineDate: null,
+        reappear: true,
+    };
+
+    const noticeBarTemplate = (text, link, linkText, linkClose, cssClasses) => `
+        <div id="notice-bar" class="notice-bar-wrapper sticky top-0 min-h-10 w-full flex items-center z-30 md:h-10 ${cssClasses}">
+            <div class="flex items-center px-2 w-full">
+                <div class="flex items-center w-full md:justify-center">
+                    <p class="notice-bar-message text-xs text-white leading-snug pr-3 md:text-sm md:px-0">${text}</p>
+                    <a href="${link}" target="_blank" class="notice-bar-link underline text-white text-xs -mt-px flex-0-0-auto ml-auto leading-normal md:text-sm md:ml-4" data-close="${linkClose}">${linkText}</a>
+                </div>
+                <button type="button" class="flex-0-0-auto p-2 ml-auto -mr-2 xl:mr-0" aria-label="close" data-close="true">
+                    <svg class="pointer-event-none h-5 w-5 text-white" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                        <path d="M256-192.348 192.348-256l224-224-224-224L256-767.652l224 224 224-224L767.652-704l-224 224 224 224L704-192.348l-224-224-224 224Z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+
+    class NoticeBar {
+        constructor(options) {
+            this._options = Object.assign(cloneObj(defaultOptions), options);
+            this._selector = SELECTOR_NOTICE_BAR;
+            this._rootEl = 'body';
+        }
+
+        setBar() {
+            if (HappycowCookies.getCookie(`${this._options.cookieName}`)) return false;
+
+            if (this._options.deadlineDate) {
+                const deadlineDate = new Date(this._options.deadlineDate);
+                const deadlineDateFormatted = deadlineDate.toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' });
+                const userDate = new Date(Date.now());
+                const userDatePST = userDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
+
+                if (new Date(userDatePST) >= new Date(deadlineDateFormatted)) return;
+            }
+
+            if (document.querySelector(this._selector)) {
+                deleteElement(this._selector);
+            }
+
+            prependContent(this._rootEl, this._createNoticeBar());
+            if (!this._options.reappear) {
+                document.querySelector(`${this._selector} .notice-bar-link`).setAttribute('data-close', 'true');
+            }
+
+            document.querySelector(this._rootEl).classList.add(CLASS_NAME_NOTICE_BAR_VISIBLE);
+            this._events();
+
+            if (this._options.showOnce) {
+                HappycowCookies.setCookie(`${this._options.cookieName}`, false, { path: '/', expires: this._options.cookieExpires });
+            }
+        }
+
+        closeBar(setCookie = false) {
+            if (setCookie) {
+                HappycowCookies.setCookie(`${this._options.cookieName}`, false, { expires: this._options.cookieExpires, path: '/' });
+            }
+            if (!this._options.reappear) {
+                HappycowCookies.setCookie(`${cookieName}`, false, { path: '/', expires: 365 });
+            }
+            document.querySelector(this._rootEl).classList.remove(CLASS_NAME_NOTICE_BAR_VISIBLE);
+            document.querySelector('.navbar').style.top = '0px';
+            deleteElement(this._selector);
+            dispatchCustomEvent(document.body, 'closed.hc.notice.bar');
+        }
+
+        _events() {
+            addLiveEventListener('click', `${this._selector} [data-close="true"]`, (e) => {
+                this.closeBar(this._options.cookieName);
+                if (e.target.classList.contains('notice-bar-link')) {
+                    dispatchCustomEvent(document.body, 'link.clicked.hc.notice.bar');
+                }
+            });
+        }
+
+        _createNoticeBar() {
+            return noticeBarTemplate(
+                this._options.text,
+                this._options.link,
+                this._options.linkText,
+                this._options.linkClose,
+                `${this._options.cssBgClass} ${this._options.cssCustomClass}`
+            );
+        }
+    }
+
+    return NoticeBar;
+})();

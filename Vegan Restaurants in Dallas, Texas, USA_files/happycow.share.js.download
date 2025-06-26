@@ -1,0 +1,171 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowShare = (function () {
+    const CLASS_NAME_CLIPBOARD_BTN = 'clipboard-btn';
+
+    const SELECTOR_SHARE_BTN = '.share-btn';
+    const SELECTOR_SHARE_DEFAULT_BTN = '.share-default-btn';
+    const SELECTOR_CLIPBOARD_BTN = `.${CLASS_NAME_CLIPBOARD_BTN}`;
+
+    const INFO_TEXT_COPY = 'Copy to clipboard: Ctrl+C, Enter';
+
+    const shareTemplate = `
+        <svg class="h-7 w-7 text-primary-500" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+            <path d="M280-271.869q-86.374 0-147.252-60.873-60.879-60.873-60.879-147.239 0-86.367 60.879-147.258Q193.626-688.131 280-688.131h110.913q19.152 0 32.326 13.174t13.174 32.327q0 19.152-13.174 32.326t-32.326 13.174H280q-48.804 0-82.967 34.163T162.87-480q0 48.804 34.163 82.967T280-362.87h110.913q19.152 0 32.326 13.174t13.174 32.326q0 19.153-13.174 32.327t-32.326 13.174H280Zm76.413-166.218q-17.813 0-29.863-12.05T314.5-480q0-17.813 12.05-29.863t29.863-12.05h247.174q17.813 0 29.863 12.05T645.5-480q0 17.813-12.05 29.863t-29.863 12.05H356.413Zm212.674 166.218q-19.152 0-32.326-13.174t-13.174-32.327q0-19.152 13.174-32.326t32.326-13.174H680q48.804 0 82.967-34.163T797.13-480q0-48.804-34.163-82.967T680-597.13H569.087q-19.152 0-32.326-13.174t-13.174-32.326q0-19.153 13.174-32.327t32.326-13.174H680q86.374 0 147.252 60.873 60.879 60.873 60.879 147.239 0 86.367-60.879 147.258Q766.374-271.869 680-271.869H569.087Z"/>
+        </svg>
+        <span>URL Copied</span>
+    `;
+
+    const alertMessageTemplate = (page, customTextFacebook, customTextTwitterX) => `
+        <p class="text-gray-800 text-base font-normal my-2">Share this page with your family and friends</p>
+        <div class="grid grid-cols-2 gap-4 mt-6">
+            <div>
+                <a href="https://www.facebook.com/sharer/sharer.php?u=${
+                    customTextFacebook || page
+                }" class="w-full rounded-lg py-2.5 px-2 bg-facebook flex items-center justify-center text-white hover:bg-facebook/90 transition-colors duration-200" target="_blank">
+                    <svg class="w-5 h-5 mr-2 -mt-[2px] text-white" viewBox="0 0 24 24" fill="none" stroke="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 8.66667H7V12H9.5V22H13.6667V12H16.7017L17 8.66667H13.6667V7.2775C13.6667 6.48167 13.8267 6.16667 14.5958 6.16667H17V2H13.8267C10.83 2 9.5 3.31917 9.5 5.84583V8.66667Z" fill="currentColor"/>
+                    </svg>
+                    Facebook
+                </a>
+            </div>
+            <div>
+                <a href="${Config.twitterX.tweetTextUrl}${
+        customTextTwitterX || page
+    }" target="_blank" class="w-full rounded-lg py-2.5 px-2 bg-twitter-x justify-center text-white flex items-center hover:bg-twitter-x/85 transition-colors duration-200">
+                    <svg class="h-4 w-4 mr-3" width="1200" height="1227" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z"/>
+                    </svg>
+                    Share on X
+                </a>
+            </div>
+        </div>
+        <div class="my-6 relative flex items-center justify-center h-6">
+            <div class="absolute w-full left-0 h-px bg-gray-200"></div>
+            <div class="absolute text-sm font-bold z-8 bg-white px-5">Or</div>
+        </div>
+        <div>
+            <a role="button" class="btn-media ${CLASS_NAME_CLIPBOARD_BTN} clipboard max-w-59 w-full mx-auto rounded-lg border border-gray-200 py-2 px-3 flex items-center justify-center cursor-pointer text-base-500 font-normal transition-all duration-200 ease-in-out hover:bg-gray-100" data-url=${page}>
+                <svg class="h-6 w-6 mr-2 shrink-0" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                    <path d="M280-271.869q-86.374 0-147.252-60.873-60.879-60.873-60.879-147.239 0-86.367 60.879-147.258Q193.626-688.131 280-688.131h110.913q19.152 0 32.326 13.174t13.174 32.327q0 19.152-13.174 32.326t-32.326 13.174H280q-48.804 0-82.967 34.163T162.87-480q0 48.804 34.163 82.967T280-362.87h110.913q19.152 0 32.326 13.174t13.174 32.326q0 19.153-13.174 32.327t-32.326 13.174H280Zm76.413-166.218q-17.813 0-29.863-12.05T314.5-480q0-17.813 12.05-29.863t29.863-12.05h247.174q17.813 0 29.863 12.05T645.5-480q0 17.813-12.05 29.863t-29.863 12.05H356.413Zm212.674 166.218q-19.152 0-32.326-13.174t-13.174-32.327q0-19.152 13.174-32.326t32.326-13.174H680q48.804 0 82.967-34.163T797.13-480q0-48.804-34.163-82.967T680-597.13H569.087q-19.152 0-32.326-13.174t-13.174-32.326q0-19.153 13.174-32.327t32.326-13.174H680q86.374 0 147.252 60.873 60.879 60.873 60.879 147.239 0 86.367-60.879 147.258Q766.374-271.869 680-271.869H569.087Z"/>
+                </svg>
+                Copy Link
+            </a>
+        </div>
+    `;
+
+    class Share {
+        constructor() {
+            this._customTextFacebook = '';
+            this._customTextTwitterX = '';
+            this._selector = null;
+        }
+
+        init(selector = SELECTOR_SHARE_BTN, page = '', customTexts = {}) {
+            this._selector = selector;
+
+            const { facebook, twitterX } = customTexts;
+            const shareBtn = document.querySelector(this._selector);
+
+            if (facebook) {
+                this._customTextFacebook = encodeURIComponent(facebook);
+            }
+
+            if (twitterX) {
+                this._customTextTwitterX = encodeURIComponent(twitterX);
+            }
+
+            if (shareBtn) {
+                this.events(page || shareBtn.dataset.url);
+            }
+        }
+
+        getTemplate(page) {
+            if (!page) return;
+            return alertMessageTemplate(page, this._customTextFacebook, this._customTextTwitterX);
+        }
+
+        events(shareUrl) {
+            addLiveEventListener('click', this._selector, (e) => {
+                e.preventDefault();
+                const result = this.getTemplate(encodeURIComponent(e.target.dataset.url || shareUrl || window.location.href));
+                hcAlert.open({
+                    title: 'Share This',
+                    message: result,
+                    buttonConfirm: false,
+                });
+            });
+
+            addLiveEventListener('click', SELECTOR_CLIPBOARD_BTN, (e) => {
+                e.preventDefault();
+                const text = decodeURIComponent(e.target.dataset.url || window.location.href);
+                this._copyText(text);
+            });
+
+            addLiveEventListener('click', SELECTOR_SHARE_DEFAULT_BTN, (e) => {
+                e.preventDefault();
+                const { target } = e;
+                const { url, title } = target.dataset;
+                if (getUserDevice() === 'Desktop' || !window.navigator.share) {
+                    this._copyText(url);
+                    return;
+                }
+                navigator
+                    .share({
+                        title: title || 'HappyCow - User Trip',
+                        url: url || window.location.href,
+                    })
+                    .then(() => {})
+                    .catch((error) => {
+                        if (error.name !== 'AbortError') {
+                            HappycowErrorReporter.logError({ error }, 'Sharing failed');
+                        }
+                    });
+            });
+        }
+
+        _copyText(text) {
+            if (!text) return;
+            if (!navigator.clipboard) {
+                this._fallbackCopyTextToClipboard(text);
+                return;
+            }
+            this._copyTextToClipboard(text);
+        }
+
+        _fallbackCopyTextToClipboard(text) {
+            if (!text) return;
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                const msg = successful ? HappycowToastr.basic('', shareTemplate) : window.prompt(INFO_TEXT_COPY, text);
+            } catch (err) {
+                window.prompt(INFO_TEXT_COPY, text);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        _copyTextToClipboard(text) {
+            if (!text) return;
+            navigator.clipboard
+                .writeText(text)
+                .then(() => {
+                    HappycowToastr.basic('', shareTemplate);
+                    hcAlert.terminate();
+                })
+                .catch(() => {
+                    window.prompt(INFO_TEXT_COPY, text);
+                });
+        }
+    }
+
+    return Share;
+})();

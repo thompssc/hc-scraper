@@ -1,0 +1,522 @@
+{
+  "name": "HappyCow Cloud Scraper Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/get_next_city_to_scrape",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Get Next City",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.length}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Check City Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/update_city_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_id\": \"{{$json[0].id}}\",\n  \"new_status\": \"running\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Update Status Running",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SCRAPER_SERVICE_URL}}/scrape",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{$node['Get Next City'].json[0].url}}\",\n  \"full_path\": \"{{$node['Get Next City'].json[0].full_path}}\",\n  \"city\": \"{{$node['Get Next City'].json[0].city}}\",\n  \"state\": \"{{$node['Get Next City'].json[0].state}}\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Call Scraper Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/log_scraping_activity",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_path_param\": \"{{$node['Get Next City'].json[0].full_path}}\",\n  \"city_name_param\": \"{{$node['Get Next City'].json[0].city}}\",\n  \"state_name_param\": \"{{$node['Get Next City'].json[0].state}}\",\n  \"status_param\": \"started\",\n  \"workflow_id_param\": \"{{$workflow.id}}\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Log Scraping Started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.success}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Check Scraper Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/restaurants",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json.restaurants)}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates"
+            }
+          ]
+        }
+      },
+      "name": "Insert Restaurants",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1780, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/update_city_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_id\": \"{{$node['Get Next City'].json[0].id}}\",\n  \"new_status\": \"completed\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Update Status Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2000, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/log_scraping_activity",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_path_param\": \"{{$node['Get Next City'].json[0].full_path}}\",\n  \"city_name_param\": \"{{$node['Get Next City'].json[0].city}}\",\n  \"state_name_param\": \"{{$node['Get Next City'].json[0].state}}\",\n  \"status_param\": \"completed\",\n  \"restaurants_found_param\": {{$node['Call Scraper Service'].json.total_restaurants}},\n  \"pages_scraped_param\": {{$node['Call Scraper Service'].json.pages_scraped}},\n  \"duration_seconds_param\": {{$node['Call Scraper Service'].json.duration_seconds}},\n  \"workflow_id_param\": \"{{$workflow.id}}\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Log Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2220, 100]
+    },
+    {
+      "parameters": {
+        "channel": "{{$env.SLACK_CHANNEL}}",
+        "text": "=✅ **{{$node['Get Next City'].json[0].city}}, {{$node['Get Next City'].json[0].state}}** scraped successfully!\n\n📊 **Results:**\n• Restaurants found: **{{$node['Call Scraper Service'].json.total_restaurants}}**\n• Duration: **{{$node['Call Scraper Service'].json.duration_seconds}}s**\n• Pages scraped: **{{$node['Call Scraper Service'].json.pages_scraped}}**\n\n🔗 City: {{$node['Get Next City'].json[0].url}}",
+        "otherOptions": {}
+      },
+      "name": "Slack Success Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [2440, 100],
+      "credentials": {
+        "slackApi": {
+          "id": "{{$env.SLACK_CREDENTIAL_ID}}",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/update_city_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_id\": \"{{$node['Get Next City'].json[0].id}}\",\n  \"new_status\": \"error\",\n  \"error_msg\": \"{{$node['Call Scraper Service'].json.error}}\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Update Status Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/log_scraping_activity",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city_path_param\": \"{{$node['Get Next City'].json[0].full_path}}\",\n  \"city_name_param\": \"{{$node['Get Next City'].json[0].city}}\",\n  \"state_name_param\": \"{{$node['Get Next City'].json[0].state}}\",\n  \"status_param\": \"error\",\n  \"error_message_param\": \"{{$node['Call Scraper Service'].json.error}}\",\n  \"workflow_id_param\": \"{{$workflow.id}}\"\n}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$env.SUPABASE_SERVICE_KEY}}"
+            }
+          ]
+        }
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "channel": "{{$env.SLACK_CHANNEL}}",
+        "text": "=❌ **{{$node['Get Next City'].json[0].city}}, {{$node['Get Next City'].json[0].state}}** scraping failed!\n\n🚨 **Error:**\n```{{$node['Call Scraper Service'].json.error}}```\n\n🔗 City: {{$node['Get Next City'].json[0].url}}\n\n⚙️ Workflow: {{$workflow.name}}",
+        "otherOptions": {}
+      },
+      "name": "Slack Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [2220, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "{{$env.SLACK_CREDENTIAL_ID}}",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Next City",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Next City": {
+      "main": [
+        [
+          {
+            "node": "Check City Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check City Available": {
+      "main": [
+        [
+          {
+            "node": "Update Status Running",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Update Status Running": {
+      "main": [
+        [
+          {
+            "node": "Call Scraper Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Scraper Service": {
+      "main": [
+        [
+          {
+            "node": "Log Scraping Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Scraping Started": {
+      "main": [
+        [
+          {
+            "node": "Check Scraper Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Scraper Success": {
+      "main": [
+        [
+          {
+            "node": "Insert Restaurants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Status Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Restaurants": {
+      "main": [
+        [
+          {
+            "node": "Update Status Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Completed": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Slack Success Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Error": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Slack Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+} 

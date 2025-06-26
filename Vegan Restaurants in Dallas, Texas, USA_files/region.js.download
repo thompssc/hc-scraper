@@ -1,0 +1,809 @@
+(() => {
+    const CLASS_NAME_ACTIVE = UI_CONSTANTS.stateActive;
+    const CLASS_NAME_HIDDEN = UI_CONSTANTS.displayHidden;
+
+    const VIEW_MORE_NEXT = 'next';
+    const VIEW_MORE_PREV = 'prev';
+
+    const HOURS_STATUS_CLASSES = Object.freeze({
+        open: 'text-green-500',
+        closed: 'text-red-500',
+    });
+
+    const HOURS_STATUS_TEXT = Object.freeze({
+        closed: 'Closed',
+        closingSoon: 'Closing Soon',
+        holiday: 'Closed temporarily',
+        openNow: 'Open Now',
+        openingSoon: 'Opening Soon',
+    });
+
+    const checkIconTemplate = `
+        <span class="absolute top-0 right-0 -mt-2 -mr-2 bg-primary-500 text-white rounded-full w-5 h-5 flex items-center justify-center">
+            <svg class="h-4 w-4" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                <path d="m382-362.131 334.696-334.695Q730.37-710.5 749.141-710.5q18.772 0 32.446 13.674t13.674 32.446q0 18.771-13.674 32.445L414.065-264.413Q400.391-250.739 382-250.739t-32.065-13.674L178.413-435.935q-13.674-13.674-13.294-32.445.381-18.772 14.055-32.446T211.62-514.5q18.771 0 32.445 13.674L382-362.131Z"/>
+            </svg>
+        </span>
+    `;
+
+    const alertFollowCityContent = (cityName = '') => `
+        <p>Subscribe to ${cityName} updates:</p>
+        <div class="city-follow-frequency flex items-center justify-center space-x-7 mt-8">
+            <button type="button" class="btn-follow-frequency-city relative border border-gray-100 bg-gray-100 text-base-500 font-normal rounded-md py-2.5 px-3 w-full max-w-[7.5rem] data-[active=true]:bg-primary-100 data-[active=true]:border-primary-500" data-active="true" data-value="D">
+                <span class="check-icon pointer-events-none">${checkIconTemplate}</span>
+                Daily
+            </button>
+            <button type="button" class="btn-follow-frequency-city relative border border-gray-100 bg-gray-100 text-base-500 font-normal rounded-md py-2.5 px-3 w-full max-w-[7.5rem] data-[active=true]:bg-primary-100 data-[active=true]:border-primary-500" data-active="" data-value="W">
+                <span class="check-icon pointer-events-none hidden">${checkIconTemplate}</span>
+                Weekly
+            </button>
+        </div>
+        <div class="city-follow-types flex items-center justify-center space-x-7 mt-7 mb-8">
+            <button type="button" class="btn-follow-type-city relative border border-gray-100 bg-gray-100 text-base-500 font-normal rounded-md py-2.5 px-3 w-full max-w-[7.5rem] data-[active=true]:bg-primary-100 data-[active=true]:border-primary-500" data-active="true" data-value="1">
+                <span class="check-icon pointer-events-none">${checkIconTemplate}</span>
+                All
+            </button>
+            <button type="button" class="btn-follow-type-city relative border border-gray-100 bg-gray-100 text-base-500 font-normal rounded-md py-2.5 px-3 w-full max-w-[7.5rem] data-[active=true]:bg-primary-100 data-[active=true]:border-primary-500" data-active="" data-value="2">
+                <span class="check-icon pointer-events-none hidden">${checkIconTemplate}</span>
+                Vegan
+            </button>
+        </div>
+    `;
+
+    const hcFavorites = new HappycowListingFavorites();
+    const hcFilters = new HappycowFilters();
+    const hcTrips = new HappycowListingTrips();
+    const hcUrlUtils = new HappycowUrlUtils();
+
+    const cities = document.querySelector('.cities');
+    const isBestPage = document.querySelector('.listBestRestaurants,.listBestBakeries');
+    const videoEl = document.querySelector('.video-section');
+
+    let controller = null;
+    let page = hcUrlUtils.getUrlParameter('page') || 1;
+
+    hcFavorites.init();
+    hcTrips.init();
+    HappycowObserverIntersection.observeElement(videoEl);
+
+    if (isBestPage) {
+        checkVenueOpeningStatus();
+    }
+
+    if (cities) {
+        requestIdleCallback(searchVenues);
+    }
+
+    if (!isBestPage) {
+        requestAnimationFrame(() => {
+            hcFilters.init().setToggleBtn().setFilterCount().handleChains().setStoresVisibility();
+        });
+        requestIdleCallback(setFilterHistory);
+    }
+
+    addLiveEventListener('intersection.visible', 'body', (e) => {
+        const { target } = e.detail;
+        if (target === videoEl) {
+            hcSocial.loadYoutube();
+        }
+    });
+
+    addLiveEventListener('click', '.btn-follow-frequency-city', (e) => {
+        setButtonCitySubscription('.city-follow-frequency .btn-follow-frequency-city', e.target);
+    });
+
+    addLiveEventListener('click', '.btn-follow-type-city', (e) => {
+        setButtonCitySubscription('.city-follow-types .btn-follow-type-city', e.target);
+    });
+
+    addOnEventListener('click', '.city-map', () => {
+        HappycowCookies.deleteCookie('hcsearchopts', '/');
+    });
+
+    addLiveEventListener('added.hc.favorite', 'body', (e) => {
+        const { isAmbassador } = e.detail;
+        if (isAmbassador) {
+            getAmbassadorsFavorites();
+        }
+    });
+
+    addLiveEventListener('click', '.follow-city', (e) => {
+        e.preventDefault();
+        HappycowCommon.authCheck()
+            .then((data) => {
+                if (!data) {
+                    hcModal.show('#authentication-modal', 'Please login or register to follow a city', false);
+                    return;
+                }
+
+                const lastBreadcrumb = document.querySelector('.breadcrumb li:last-child');
+                if (!lastBreadcrumb) {
+                    HappycowErrorReporter.logError({ errorMessage: 'City page: Last breadcrumb element does not exist' }, UI_ERROR_MESSAGES.fallback);
+                    return;
+                }
+
+                const cityName = lastBreadcrumb.textContent.trim();
+                if (!cityName || cityName.length === 0) {
+                    HappycowErrorReporter.logError({ errorMessage: 'City page: City name is missing' }, UI_ERROR_MESSAGES.fallback);
+                    return;
+                }
+
+                const path = lastBreadcrumb.dataset.path.trim();
+                if (!path || path.length === 0) {
+                    HappycowErrorReporter.logError({ errorMessage: 'City page: Path is missing' }, UI_ERROR_MESSAGES.fallback);
+                    return;
+                }
+
+                openAlertFollowCity(cityName, path);
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    });
+
+    addLiveEventListener('click', '#view-more-favorites-next', () => {
+        viewMoreControl('div.ambassador-favorites div.border', VIEW_MORE_NEXT);
+    });
+
+    addLiveEventListener('click', '#view-more-favorites-prev', () => {
+        viewMoreControl('div.ambassador-favorites div.border', VIEW_MORE_PREV);
+    });
+
+    addOnEventListener('click', '#view-more-nearby-next', () => {
+        viewMoreControl('div.nearby-cities div.border', VIEW_MORE_NEXT);
+    });
+
+    addOnEventListener('click', '#view-more-nearby-prev', () => {
+        viewMoreControl('div.nearby-cities div.border', VIEW_MORE_PREV);
+    });
+
+    addLiveEventListener('click', '.pagination-link', function (e) {
+        e.preventDefault();
+        page = this.dataset.page;
+        scrollToAnchor('#full-site-content');
+        searchVenues();
+    });
+
+    addOnEventListener('filter.click', '.list-paths #filters .btn-filter.filter', () => {
+        searchRegions();
+    });
+
+    addOnEventListener('filter.click', '.cities #filters .btn-filter.filter', () => {
+        page = 1;
+        searchVenues();
+    });
+
+    addOnEventListener('change', '#sort', (e) => {
+        e.preventDefault();
+        page = 1;
+        searchVenues();
+    });
+
+    addLiveEventListener('click', '#stores-more-btn', (e) => {
+        e.preventDefault();
+        setOnlyStoresFilters();
+        hcFilters.setStoresVisibility();
+        hcFilters.setToggleBtn();
+        page = 1;
+        searchVenues();
+        scrollToAnchor('.venue-city-items');
+    });
+
+    addOnEventListener('filter.helper.click', '.list-paths .filter-helper', (e) => {
+        e.preventDefault();
+        searchRegions();
+    });
+
+    addOnEventListener('filter.helper.click', '.cities .filter-helper', (e) => {
+        e.preventDefault();
+        page = 1;
+        searchVenues();
+    });
+
+    addOnEventListener('click', '.vegonly', (e) => {
+        e.preventDefault();
+        HappycowCookies.setCookie('vegOnly', true, { expires: 365, path: '/', secure: true });
+        hcFilters.unselectAll();
+        const filterVegan = document.querySelector('.filter[name=vegan]');
+        if (filterVegan) filterVegan.click();
+        const filterVegetarian = document.querySelector('.filter[name=vegetarian]');
+        if (filterVegetarian) filterVegetarian.click();
+        const vegOnly = document.querySelector('.display-only-veg');
+        if (vegOnly) {
+            vegOnly.remove();
+        }
+        hcFilters.setToggleBtn();
+        hcFilters.setFilterCount();
+        page = 1;
+        searchVenues();
+    });
+
+    addOnEventListener('click', '.vegfriendly', (e) => {
+        e.preventDefault();
+        HappycowCookies.setCookie('vegOnly', false, { expires: 365, path: '/', secure: true });
+        const el = e.target.closest('.display-only-veg');
+        el.querySelector('h4').textContent = "To display veg listings only, uncheck all filters except 'Veg-Options' below.";
+        el.querySelectorAll('.btn').forEach((item) => item.remove());
+    });
+
+    addLiveEventListener('click', '.city-results #reset-filters', (e) => {
+        e.preventDefault();
+        hcFilters.setFiltersActive().handleChains().setFilterCount();
+        page = 1;
+        searchVenues();
+    });
+
+    addLiveEventListener('click', '.region-panel-list #reset-filters', (e) => {
+        e.preventDefault();
+        hcFilters.setFiltersActive().handleChains().setFilterCount();
+        searchRegions();
+    });
+
+    addLiveEventListener('mousedown', '[data-analytics="listing-card"]', (e) => {
+        trackListingSelect(e, 'listing_card');
+    });
+
+    addLiveEventListener('mousedown', '[data-analytics="cta-read-review"]', (e) => {
+        trackListingSelect(e, 'cta_read_reviews');
+    });
+
+    addLiveEventListener('mousedown', '[data-analytics="cta-add-review"]', (e) => {
+        trackListingSelect(e, 'cta_add_review');
+    });
+
+    addLiveEventListener('added.hc.favorite', 'body', () => {
+        HappycowAnalytics.gtagEvent('favorite_add', {
+            source: 'explore',
+        });
+    });
+
+    addLiveEventListener('removed.hc.favorite', 'body', () => {
+        HappycowAnalytics.gtagEvent('favorite_remove', {
+            source: 'explore',
+        });
+    });
+
+    addLiveEventListener('saved.hc.listing.trip', 'body', (e) => {
+        HappycowAnalytics.gtagEvent('trip_add_listing', {
+            source: 'explore',
+        });
+    });
+
+    HappycowAnalytics.gtagEventLink('[data-analytics="listing-directions"]', 'listing_directions_select', {
+        source: 'explore',
+    });
+
+    function trackListingSelect(e, triggerName) {
+        const { button, target } = e;
+        if (button !== 0 && button !== 1) return;
+        const cardListingEl = target.closest('.card-listing');
+        if (!cardListingEl) return;
+        const imageEl = cardListingEl.querySelector('.card-listing-image');
+        if (!imageEl) return;
+
+        HappycowAnalytics.gtagEvent('listing_details', {
+            source: 'explore',
+            category: cardListingEl.getAttribute('data-type') || '',
+            new: cardListingEl.getAttribute('data-new') || '0',
+            top_rated: cardListingEl.getAttribute('data-top') || '0',
+            variant: imageEl.getAttribute('data-placeholder') || '0',
+            trigger: triggerName,
+        });
+    }
+
+    function scrollToAnchor(selector) {
+        document.querySelector(selector).scrollIntoView({
+            behavior: 'smooth',
+        });
+    }
+
+    function setFilterHistory() {
+        const queryString = decodeURIComponent(getQueryString());
+        setHistory(queryString, 'Happycow filters reloaded');
+    }
+
+    function setOnlyStoresFilters() {
+        const restaurantFilters = document.querySelectorAll('.restaurant-filters .btn-filter.filter');
+        restaurantFilters.forEach((item) => {
+            item.classList.remove(CLASS_NAME_ACTIVE, `bg-${item.dataset.label}`, '!text-white');
+        });
+
+        const storesFilters = document.querySelectorAll('.filters-group .btn-filter.filter');
+        storesFilters.forEach((item) => {
+            item.classList.add(CLASS_NAME_ACTIVE, `bg-${item.dataset.label}`, '!text-white');
+        });
+    }
+
+    function getQueryString() {
+        const activeFiltersBtn = document.querySelectorAll('.btn-filter.filter.active:not(.btn-chains-disabled)');
+        const inactiveFiltersBtn = document.querySelectorAll('.btn-filter.filter:not(.active)');
+        let queryString = '';
+        activeFiltersBtn.forEach(function (item) {
+            if (item.getAttribute('name')) {
+                queryString = setQueryString(queryString, encodeURI(item.getAttribute('name')));
+            }
+        });
+
+        if (inactiveFiltersBtn.length == 0) {
+            queryString = '';
+        }
+
+        return queryString;
+    }
+
+    function isInvalid(str) {
+        return str.indexOf('undefined') >= 0;
+    }
+
+    function setQueryString(queryString, append) {
+        if (isInvalid(append)) {
+            return queryString;
+        }
+        if (queryString.length > 0) {
+            queryString += `-${append}`;
+            return queryString;
+        }
+        queryString += append;
+        return queryString;
+    }
+
+    function getSorting() {
+        const sort = document.querySelector('#sort');
+        if (!sort) return 'default';
+        return document.querySelector('#sort').selectedOptions[0].value;
+    }
+
+    function setSorting(url) {
+        const option = getSorting();
+        if (option.toLowerCase() === 'default') {
+            return url;
+        }
+        return updateQueryStringParameter(url, 'sort', option); // redo
+    }
+
+    function setPage(url) {
+        if (page === 1) {
+            return url;
+        }
+        return updateQueryStringParameter(url, 'page', page); // redo
+    }
+
+    function setSearchFiltersCookie(cookieData) {
+        if (cookieData.length === 0) {
+            HappycowCookies.deleteCookie('hcsearchfilters', '/');
+            return;
+        }
+        HappycowCookies.setCookie('hcsearchfilters', btoa(cookieData), { expires: 60, path: '/', secure: true });
+    }
+
+    function setPrintParams() {
+        document.querySelector('.print-item').setAttribute('href', window.location.pathname + 'print' + window.location.search);
+    }
+
+    function setCityMapParams() {
+        const cityMap = document.querySelector('.city-map');
+        if (!cityMap) return;
+        const searchParams = new URLSearchParams(window.location.search.substr(1));
+        searchParams.set('location', cityMap.dataset.location);
+        searchParams.set('distance', 25);
+        searchParams.set('xtra', 'm-c');
+        cityMap.setAttribute('href', `/searchmap?${searchParams.toString()}`);
+    }
+
+    function setHistory(queryString, description) {
+        let historyUrl = `${window.location.pathname}?filters=${queryString}`;
+        if (queryString.length === 0) {
+            historyUrl = window.location.pathname;
+            historyUrl = setSorting(historyUrl);
+            historyUrl = setPage(historyUrl);
+            hcUrlUtils.setHistoryUrl(historyUrl, 'filter', description, '/');
+            return;
+        }
+        historyUrl = setSorting(historyUrl);
+        historyUrl = setPage(historyUrl);
+        hcUrlUtils.setHistoryUrl(historyUrl, 'filter', description, '/');
+    }
+
+    function searchVenues() {
+        const queryString = decodeURIComponent(getQueryString());
+        setSearchFiltersCookie(queryString);
+        if (queryString.length === 0) {
+            setHistory(queryString, 'Happycow City Page');
+            requestAnimationFrame(() => {
+                hcFilters.setFiltersActive().handleChains().setFilterCount();
+                hcFilters.setToggleBtn();
+            });
+            getCityResults(queryString);
+            return;
+        }
+        setHistory(queryString, 'Happycow City Page');
+        getCityResults(queryString);
+    }
+
+    function setPaginatedMeta(data) {
+        const { next, prev } = data;
+        const prevEl = document.querySelector('link[rel=prev]');
+        const nextEl = document.querySelector('link[rel=next]');
+        if (!prevEl && prev) {
+            const linkEl = document.createElement('link');
+            linkEl.rel = 'prev';
+            linkEl.href = prev;
+            document.head.appendChild(linkEl);
+        }
+        if (!nextEl && next) {
+            const linkEl = document.createElement('link');
+            linkEl.rel = 'next';
+            linkEl.href = next;
+            document.head.appendChild(linkEl);
+        }
+    }
+
+    function searchRegions() {
+        const queryString = decodeURIComponent(getQueryString());
+        setSearchFiltersCookie(queryString);
+        if (queryString.length === 0) {
+            setHistory(queryString, 'Happycow Region Page');
+            hcFilters.setFiltersActive().handleChains().setFilterCount();
+            hcFilters.setToggleBtn();
+            getRegionResults(queryString);
+            return;
+        }
+        setHistory(queryString, 'Happycow Region Page');
+        getRegionResults(queryString);
+    }
+
+    function getRegionResults() {
+        if (controller) controller.abort();
+        controller = new AbortController();
+        const { signal } = controller;
+
+        let path = document.querySelector('.breadcrumb li:last-child').dataset.path;
+        path = path.replace(/\//g, '|');
+        path = encodeURI(path);
+
+        const params = window.location.search;
+
+        get(`/ajax/views/region/list/${path}${params}`, { signal })
+            .then(({ data, message, success }) => {
+                if (data && success) {
+                    emptyElement('.region-panel-list');
+                    appendContent('.region-panel-list', data);
+                    const { total } = document.querySelector('.region-panel').dataset;
+                    document.querySelector('.total-paths').innerText = total;
+                    return;
+                }
+                HappycowToastr.error(message || UI_ERROR_MESSAGES.fallback);
+            })
+            .catch((error) => {
+                if (error.name !== 'AbortError') {
+                    HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+                }
+            });
+    }
+
+    function showNotification() {
+        const venueElms = document.querySelectorAll('.venue-list-item');
+        if (venueElms && venueElms.length > 0) {
+            vegFriendlyElms = document.querySelectorAll('.bg-veg-options');
+            if (vegFriendlyElms && vegFriendlyElms.length > 0) {
+                const vegOnlyCookie = HappycowCookies.getCookie('vegOnly');
+                if (vegOnlyCookie === null) {
+                    document.querySelector('.display-only-veg').parentElement.classList.remove(CLASS_NAME_HIDDEN);
+                }
+            }
+        }
+    }
+
+    function getAmbassadorsFavorites() {
+        let { path } = document.querySelector('.breadcrumb li:last-child').dataset;
+        path = path.replace(/\//g, '|');
+        path = encodeURI(path);
+
+        get(`/ajax/views/city/favorites/${path}`)
+            .then(({ data, message, success }) => {
+                if (data && success) {
+                    emptyElement('.ambassador-favorites-section');
+                    appendContent('.ambassador-favorites-section', data);
+                    hcLazyLoadImages.setLazyLoadObserve('.ambassador-favorites-section');
+                    return;
+                }
+                HappycowToastr.error(message || UI_ERROR_MESSAGES.fallback);
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function updateQueryStringParameter(url, key, value) {
+        if (!url) url = window.location.href;
+        const re = new RegExp('([?&])' + key + '=.*?(&|#|$)(.*)', 'gi');
+        let hash;
+
+        if (re.test(url)) {
+            if (typeof value !== 'undefined' && value !== null) return url.replace(re, '$1' + key + '=' + value + '$2$3');
+
+            hash = url.split('#');
+            url = hash[0].replace(re, '$1$3').replace(/(&|\?)$/, '');
+            if (typeof hash[1] !== 'undefined' && hash[1] !== null) url += `#${hash[1]}`;
+            return url;
+        }
+        if (typeof value !== 'undefined' && value !== null) {
+            const separator = url.indexOf('?') !== -1 ? '&' : '?';
+            hash = url.split('#');
+            url = hash[0] + separator + key + '=' + value;
+            if (typeof hash[1] !== 'undefined' && hash[1] !== null) url += `#${hash[1]}`;
+            return url;
+        }
+        return url;
+    }
+
+    function followSuccess() {
+        hcAlert
+            .open({
+                title: "You're now following this city",
+                buttonsLayout: 'advanced',
+                buttonCancel: {
+                    text: 'Close',
+                },
+                buttonConfirm: {
+                    text: 'Manage Cities',
+                    closeAlert: true,
+                    value: true,
+                },
+            })
+            .then((value) => {
+                if (value) {
+                    window.location.href = '/members/profile/manage/cities';
+                }
+            });
+    }
+
+    function followError(message) {
+        hcAlert
+            .open({
+                title: 'Oops...',
+                message: message,
+                buttonsLayout: 'advanced',
+                buttonCancel: {
+                    text: 'Close',
+                },
+                buttonConfirm: {
+                    text: 'Manage Cities',
+                    closeAlert: true,
+                    value: true,
+                },
+            })
+            .then((value) => {
+                if (value) {
+                    window.location.href = '/members/profile/manage/cities';
+                }
+            });
+    }
+
+    function followCity(path, freq, type) {
+        const formData = new FormData();
+
+        formData.append(csrf.name, csrf.value);
+        formData.append('path', encodeURIComponent(path));
+        formData.append('freq', freq);
+        formData.append('type', type);
+
+        post('/ajax/member/city/follow', formData)
+            .then(({ message, success }) => {
+                if (success) {
+                    followSuccess();
+                    return;
+                }
+                if (message) {
+                    followError(message);
+                    return;
+                }
+                HappycowToastr.error(UI_ERROR_MESSAGES.fallback);
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function updateVenueOpeningStatus(item) {
+        const { holiday, holidayMessage, id, isClosingSoon, isOpen, isOpeningSoon } = item;
+        const venueEl = document.querySelector(`.venue-list-item[data-id="${id}"]`);
+        if (!venueEl) return;
+
+        const venueHoursEl = venueEl.querySelector('.venue-hours-text');
+        if (!venueHoursEl) return;
+
+        if (holiday) {
+            venueHoursEl.innerHTML = HOURS_STATUS_TEXT.holiday;
+            venueHoursEl.classList.add(HOURS_STATUS_CLASSES.closed);
+            if (holidayMessage) {
+                venueEl.querySelector('.venue-item-note').innerText += `Note: ${holidayMessage}`;
+            }
+        }
+
+        if (!isOpen) {
+            venueHoursEl.innerHTML = HOURS_STATUS_TEXT.closed;
+            venueHoursEl.classList.add(HOURS_STATUS_CLASSES.closed);
+            return;
+        }
+
+        if (isClosingSoon) {
+            venueHoursEl.innerHTML = HOURS_STATUS_TEXT.closingSoon;
+            venueHoursEl.classList.add(HOURS_STATUS_CLASSES.closed);
+            return;
+        }
+
+        if (isOpen) {
+            venueHoursEl.innerHTML = HOURS_STATUS_TEXT.openNow;
+            venueHoursEl.classList.add(HOURS_STATUS_CLASSES.open);
+            return;
+        }
+
+        if (isOpeningSoon) {
+            venueHoursEl.innerHTML = HOURS_STATUS_TEXT.openingSoon;
+            venueHoursEl.classList.add(HOURS_STATUS_CLASSES.open);
+            return;
+        }
+
+        venueHoursEl.parentElement.classList.add(CLASS_NAME_HIDDEN);
+    }
+
+    function checkVenueOpeningStatus() {
+        const venueElms = document.querySelectorAll('.venue-list-item');
+        if (!venueElms || venueElms.length === 0) return;
+
+        const formData = new FormData();
+        const venueIds = [];
+
+        venueElms.forEach((venueEl) => {
+            const { id } = venueEl.dataset;
+            if (id) {
+                venueIds.push(id);
+            }
+        });
+
+        if (!venueIds || venueIds.length === 0) return;
+
+        formData.set('ids', venueIds.join(','));
+
+        post('/ajax/hours/check', formData, { target: false })
+            .then(({ data, success }) => {
+                if (!success) return;
+                data.forEach((item) => {
+                    updateVenueOpeningStatus(item);
+                });
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function getCityResults() {
+        if (controller) controller.abort();
+        controller = new AbortController();
+
+        const { signal } = controller;
+
+        let { path } = document.querySelector('.breadcrumb li:last-child').dataset;
+        path = path.replace(/\//g, '|');
+        path = encodeURI(path);
+
+        const params = window.location.search;
+
+        get(`/ajax/views/city/venues/${path}${params}`, { signal })
+            .then(({ data, success }) => {
+                if (!success) {
+                    window.location.href = data;
+                    return;
+                }
+
+                setPaginatedMeta(data.paginated);
+
+                requestAnimationFrame(() => {
+                    emptyElement('.city-results');
+                    appendContent('.city-results', data.data);
+                    emptyElement('script[type="application/ld+json"]');
+                    if (!document.querySelector('script[type="application/ld+json"]')) {
+                        const jsonLd = document.createElement('script');
+                        jsonLd.type = 'application/ld+json';
+                        document.head.appendChild(jsonLd);
+                    }
+                    appendContent('script[type="application/ld+json"]', data.jsonLd);
+                    const total = document.querySelector('.cities-panel').dataset.total || 0;
+                    document.querySelector('.total-listings').textContent = `(${total})`;
+                    hcLazyLoadImages.setLazyLoadObserve('.venue-list-item');
+                    setPrintParams();
+                    setCityMapParams();
+                    setupAnalytics();
+                    requestIdleCallback(checkVenueOpeningStatus);
+                    requestIdleCallback(showNotification);
+                });
+            })
+            .catch((error) => {
+                if (error.name !== 'AbortError') {
+                    HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+                }
+            });
+    }
+
+    function setupAnalytics() {
+        const venuePartnersElms = document.querySelectorAll('.venue-list-item[data-partner="1"]');
+        const locationEl = document.querySelector('.city-map');
+        if (!venuePartnersElms || venuePartnersElms.length < 1) return;
+        venuePartnersElms.forEach((venue) => {
+            const venueTitle = venue.querySelector('[data-analytics="listing-card-title"]').textContent;
+            if (venueTitle.toLowerCase().includes('veggie grill')) {
+                HappycowAnalytics.gtagEvent('listing_partner_vg_loaded', {
+                    location: locationEl.getAttribute('data-location').toLowerCase() || '',
+                });
+                return;
+            }
+            if (venueTitle.toLowerCase().includes('next level burger')) {
+                HappycowAnalytics.gtagEvent('listing_partner_nlb_loaded', {
+                    location: locationEl.getAttribute('data-location').toLowerCase() || '',
+                });
+            }
+        });
+
+        HappycowAnalytics.gtagEvent('listing_partner_loaded', {
+            location: locationEl.getAttribute('data-location').toLowerCase() || '',
+        });
+    }
+
+    function setButtonCitySubscription(selector, target) {
+        document.querySelectorAll(selector).forEach((item) => {
+            item.setAttribute('data-active', 'false');
+            item.querySelector('.check-icon').classList.add(CLASS_NAME_HIDDEN);
+        });
+        target.setAttribute('data-active', 'true');
+        target.querySelector('.check-icon').classList.remove(CLASS_NAME_HIDDEN);
+    }
+
+    function viewMoreControl(selector, direction) {
+        const el = document.querySelector(`${selector}:not(.${CLASS_NAME_HIDDEN})`);
+        if (!el) return;
+        let elms;
+        if (direction.toLowerCase() === VIEW_MORE_NEXT) {
+            elms = getNextSiblings(el, (item) => {
+                return isElement(item) && item.classList.contains(CLASS_NAME_HIDDEN);
+            });
+        } else if (direction.toLowerCase() === VIEW_MORE_PREV) {
+            elms = getPreviousSiblings(el, (item) => {
+                return isElement(item) && item.classList.contains(CLASS_NAME_HIDDEN);
+            });
+        }
+        if (!elms || elms.length === 0) return;
+        elms = elms.slice(0, 5);
+        document.querySelectorAll(selector).forEach((item) => {
+            item.classList.add(CLASS_NAME_HIDDEN);
+        });
+        elms.forEach((item) => {
+            item.classList.remove(CLASS_NAME_HIDDEN);
+        });
+    }
+
+    function openAlertFollowCity(cityName, path) {
+        if (!cityName || !path) return;
+        hcAlert
+            .open({
+                title: 'Follow City',
+                message: alertFollowCityContent(cityName),
+                buttonsLayout: 'advanced',
+                buttonCancel: {
+                    text: 'Close',
+                },
+                buttonConfirm: {
+                    text: 'Ok',
+                    closeAlert: false,
+                    value: true,
+                },
+            })
+            .then((value) => {
+                if (value) {
+                    const freq = document.querySelector('.city-follow-frequency .btn-follow-frequency-city[data-active="true"]').dataset.value;
+                    const type = document.querySelector('.city-follow-types .btn-follow-type-city[data-active="true"]').dataset.value;
+                    followCity(path, freq, type);
+                }
+            });
+    }
+})();

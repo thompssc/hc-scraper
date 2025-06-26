@@ -1,0 +1,158 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowListingTrips = (function () {
+    const TRIP_NAME_MAX_LENGTH = 80;
+
+    const ERROR_MESSAGES = Object.freeze({
+        tripNameEmpty: 'Trip name cannot be empty.',
+        tripNameTooLong: 'Trip name too long. 80 characters max.',
+    });
+
+    const SELECTOR_BTN_SAVE_LISTING_TO_TRIP = '.btn-save-listing-to-trip';
+
+    const TYPE_NEW_TRIP = 'newTrip';
+    const TYPE_SAVE = 'save';
+
+    const createNewTripTemplate = `
+        <div class="w-full mx-auto">
+            <input type="text" class="appearance-none border border-gray-300 rounded w-full p-3 text-gray-800 placeholder-base-color leading-tight focus:outline-none focus:ring focus:border-input focus:shadow-input" id="new-trip" name="new-trip" placeholder="Trip name" size="50" value="" autocomplete="off">
+        </div>
+    `;
+
+    const toastrSaveTripTemplate = `
+        <div class="flex items-center justify-center flex-wrap space-x-2 md:space-x-3">
+            <div class="flex items-center space-x-2 md:space-x-3 mt-2 mb-2 sm:mt-0 sm:mb-0">
+                <svg class="h-6 w-6 md:h-7 md:w-7 text-primary-500 flex-0-0-auto" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                    <path d="m473.196-444-96 24-43-32q-3-2-16-4l-5 2q-9 2-13 10.5t1 16.5l45.043 78.087q4.239 6.717 11.076 9.696 6.837 2.978 14.794.739l339.167-89.542q14.92-3.98 22.42-18.36 7.5-14.381 3.5-29.62-4-15-17.5-22.5t-28.5-3.5l-98 26-149-140q-5-5-12-6.5t-14 .5l-5 1q-14 3-19.5 16t1.5 25l78 136ZM162.87-151.869q-37.783 0-64.392-26.609Q71.87-205.087 71.87-242.87v-136.326q0-11.108 6.933-19.002 6.933-7.894 17.828-9.867 23.761-7.522 39.5-27.207 15.739-19.685 15.739-44.848t-15.739-44.847q-15.739-19.685-39.5-26.968-10.894-1.983-17.828-9.917-6.933-7.934-6.933-18.844V-717.13q0-37.783 26.61-64.392 26.608-26.609 64.391-26.609h634.26q37.783 0 64.392 26.609 26.609 26.609 26.609 64.392v474.26q0 37.783-26.609 64.392-26.609 26.609-64.392 26.609H162.87Zm0-91.001h634.26v-474.26H162.87v97.934q37.239 22.239 58.619 59.014 21.381 36.774 21.381 80.098 0 43.323-21.381 80.182-21.38 36.859-58.619 59.098v97.934ZM480-480Z"/>
+                </svg>
+                <span>
+                    Saved to your Trip.
+                </span>
+            </div>
+            <a href="/members/profile/manage/trips" target="_blank" class="bg-primary-500 text-white rounded-full px-4 transition-all duration-200 ease-in-out hover:bg-primary-300 md:px-6 py-3">Manage</a>
+        </div>
+    `;
+
+    class ListingTrips {
+        init() {
+            addLiveEventListener('click', SELECTOR_BTN_SAVE_LISTING_TO_TRIP, (e) => {
+                HappycowCommon.authCheck().then((data) => {
+                    if (!data) {
+                        hcModal.show('#authentication-modal', `${UI_ERROR_MESSAGES.authFailed} to add a listing to your trip`, false);
+                        dispatchCustomEvent(document.body, 'failed.hc.auth');
+                        return;
+                    }
+                    this._openAlertTrips(e.target);
+                });
+            });
+        }
+
+        _openAlertTrips(saveTripEl) {
+            if (!saveTripEl || !isElement(saveTripEl)) return;
+
+            get('/ajax/trip/list')
+                .then(({ success, output }) => {
+                    if (success) {
+                        hcAlert
+                            .open({
+                                title: 'Select Trip',
+                                message: output,
+                                buttonsLayout: 'wide',
+                                buttonConfirm: {
+                                    text: 'Save',
+                                    closeAlert: false,
+                                    value: TYPE_SAVE,
+                                },
+                                buttonExtra: {
+                                    text: 'Create New Trip',
+                                    closeAlert: false,
+                                    value: TYPE_NEW_TRIP,
+                                },
+                            })
+                            .then((value) => {
+                                if (value === TYPE_NEW_TRIP) {
+                                    this._createNewTrip(saveTripEl);
+                                } else if (value === TYPE_SAVE) {
+                                    const selectedTrip = document.getElementById('list-saved-trips').selectedOptions[0].value;
+                                    this._saveListingToTrip(saveTripEl, selectedTrip);
+                                }
+                            });
+                    }
+                })
+                .catch((error) => {
+                    HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+                });
+        }
+
+        _createNewTrip(saveTripEl) {
+            if (!saveTripEl || !isElement(saveTripEl)) return;
+
+            hcAlert
+                .open({
+                    title: 'Create New Trip',
+                    message: createNewTripTemplate,
+                    buttonConfirm: {
+                        text: 'Save',
+                        value: true,
+                        closeAlert: false,
+                    },
+                })
+                .then((value) => {
+                    const inputValue = document.getElementById('new-trip').value;
+                    let isValueValid;
+                    if (value) {
+                        isValueValid = this._validateInput(inputValue);
+                    }
+                    if (!isValueValid) return;
+                    this._saveListingToTrip(saveTripEl, inputValue.trim());
+                });
+        }
+
+        _saveListingToTrip(saveTripEl, tripName) {
+            if (!saveTripEl || !isElement(saveTripEl) || !tripName) return;
+
+            const formData = new FormData();
+            formData.append(csrf.name, csrf.value);
+            formData.append('list', tripName);
+
+            post(`/ajax/reviews/${saveTripEl.dataset.url}/list/save`, formData)
+                .then(({ message, success }) => {
+                    if (success) {
+                        HappycowToastr.basic('', toastrSaveTripTemplate);
+                        hcAlert.terminate();
+                        dispatchCustomEvent(document.body, 'saved.hc.listing.trip');
+                        return;
+                    }
+                    HappycowToastr.error(message || UI_ERROR_MESSAGES.fallback);
+                })
+                .catch((error) => {
+                    HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+                });
+        }
+
+        _validateInput(inputValue) {
+            if (!inputValue && inputValue !== '') return false;
+            if (inputValue.length === 0) {
+                hcAlert.open({
+                    title: 'Error',
+                    message: ERROR_MESSAGES.tripNameEmpty,
+                });
+                return false;
+            }
+            if (inputValue.length > TRIP_NAME_MAX_LENGTH) {
+                hcAlert.open({
+                    title: 'Error',
+                    message: ERROR_MESSAGES.tripNameTooLong,
+                });
+                return false;
+            }
+            return true;
+        }
+    }
+
+    return ListingTrips;
+})();

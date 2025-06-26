@@ -1,0 +1,48 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowLocalStorageManager = (function () {
+    class LocalStorageManager extends HappycowLocalStorage {
+        setItem(name, item) {
+            if (this.hasSupport()) {
+                window.localStorage.setItem(name, JSON.stringify(item));
+                return;
+            }
+            HappycowCookies.setCookie(name, JSON.stringify(item), {
+                expires: 365,
+            });
+        }
+
+        getItem(name) {
+            let data = null;
+            if (this.hasSupport() && window.localStorage.getItem(name) != null) {
+                data = JSON.parse(window.localStorage.getItem(name));
+                return data;
+            }
+            if (HappycowCookies.getCookie(name) != null) {
+                data = JSON.parse(HappycowCookies.getCookie(name));
+                return data;
+            }
+            return data;
+        }
+
+        removeItem(name) {
+            if (this.hasSupport()) {
+                return window.localStorage.removeItem(name);
+            }
+            HappycowCookies.deleteCookie(name);
+        }
+
+        clear() {
+            if (this.hasSupport()) {
+                return window.localStorage.clear();
+            }
+            HappycowCookies.deleteAllCookies();
+        }
+    }
+
+    return LocalStorageManager;
+})();

@@ -1,0 +1,409 @@
+{
+  "name": "HappyCow Complete Scraper Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "filePath": "/path/to/enhanced_city_listings.csv",
+        "options": {
+          "delimiter": ",",
+          "enableBOM": false,
+          "encoding": "utf8",
+          "headerRow": true
+        }
+      },
+      "name": "Read CSV File",
+      "type": "n8n-nodes-base.csv",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"trigger_status\"]}}",
+              "operation": "equal",
+              "value2": "pending"
+            }
+          ]
+        }
+      },
+      "name": "Filter Pending Cities",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "city",
+              "value": "={{$json[\"city\"]}}"
+            },
+            {
+              "name": "state", 
+              "value": "={{$json[\"state\"]}}"
+            },
+            {
+              "name": "full_path",
+              "value": "={{$json[\"full_path\"]}}"
+            },
+            {
+              "name": "url",
+              "value": "={{$json[\"url\"]}}"
+            },
+            {
+              "name": "entries",
+              "value": "={{$json[\"entries\"]}}"
+            },
+            {
+              "name": "scrape_priority",
+              "value": "={{$json[\"scrape_priority\"]}}"
+            }
+          ]
+        }
+      },
+      "name": "Process City Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "filePath": "/path/to/enhanced_city_listings.csv",
+        "dataPropertyName": "data",
+        "options": {
+          "delimiter": ",",
+          "encoding": "utf8"
+        }
+      },
+      "name": "Update CSV Status Running",
+      "type": "n8n-nodes-base.csv",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python /path/to/production_city_scraper.py \"{{$json[\"full_path\"]}}\" \"{{$json[\"url\"]}}\"",
+        "options": {}
+      },
+      "name": "Execute Python Scraper",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse scraper output\nconst output = JSON.parse($input.first().json.stdout);\n\nif (output.success) {\n  return {\n    success: true,\n    city: $node[\"Process City Data\"].json.city,\n    state: $node[\"Process City Data\"].json.state,\n    full_path: $node[\"Process City Data\"].json.full_path,\n    restaurants: output.restaurants,\n    summary: output.summary,\n    total_restaurants: output.summary.total_restaurants,\n    pages_scraped: output.summary.pages_scraped\n  };\n} else {\n  throw new Error(`Scraping failed: ${output.error}`);\n}"
+      },
+      "name": "Process Scraper Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SUPABASE_URL}}/rest/v1/restaurants",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={{JSON.stringify($json.restaurants)}}"
+      },
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"success\"]}}",
+              "operation": "equal",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Success/Error Branch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SLACK_WEBHOOK_URL}}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={\n  \"text\": \"✅ HappyCow scraping completed for {{$node[\\\"Process Scraper Results\\\"].json.city}}, {{$node[\\\"Process Scraper Results\\\"].json.state}}!\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*City:* {{$node[\\\"Process Scraper Results\\\"].json.city}}, {{$node[\\\"Process Scraper Results\\\"].json.state}}\\n*Restaurants Found:* {{$node[\\\"Process Scraper Results\\\"].json.total_restaurants}}\\n*Pages Scraped:* {{$node[\\\"Process Scraper Results\\\"].json.pages_scraped}}\\n*Status:* Completed Successfully\"\n      }\n    }\n  ]\n}"
+      },
+      "name": "Slack Success Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "{{$env.SLACK_WEBHOOK_URL}}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={\n  \"text\": \"❌ HappyCow scraping failed for {{$node[\\\"Process City Data\\\"].json.city}}, {{$node[\\\"Process City Data\\\"].json.state}}\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*City:* {{$node[\\\"Process City Data\\\"].json.city}}, {{$node[\\\"Process City Data\\\"].json.state}}\\n*Error:* {{$json.error}}\\n*Status:* Failed\"\n      }\n    }\n  ]\n}"
+      },
+      "name": "Slack Error Notification", 
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update CSV with completion status\nconst fs = require('fs');\nconst csv = require('csv-parser');\nconst createCsvWriter = require('csv-writer').createObjectCsvWriter;\n\nconst csvPath = '/path/to/enhanced_city_listings.csv';\nconst cityPath = $node[\"Process City Data\"].json.full_path;\nconst success = $node[\"Success/Error Branch\"].json.success;\nconst totalRestaurants = success ? $node[\"Process Scraper Results\"].json.total_restaurants : 0;\nconst errorMessage = success ? null : $json.error;\n\n// Read CSV\nconst results = [];\nfs.createReadStream(csvPath)\n  .pipe(csv())\n  .on('data', (data) => {\n    if (data.full_path === cityPath) {\n      data.trigger_status = success ? 'completed' : 'error';\n      data.last_scraped = new Date().toISOString();\n      data.restaurants_found = totalRestaurants;\n      data.last_error = errorMessage;\n      data.retry_count = success ? 0 : (parseInt(data.retry_count) || 0) + 1;\n    }\n    results.push(data);\n  })\n  .on('end', () => {\n    // Write updated CSV\n    const csvWriter = createCsvWriter({\n      path: csvPath,\n      header: Object.keys(results[0]).map(key => ({id: key, title: key}))\n    });\n    \n    csvWriter.writeRecords(results)\n      .then(() => {\n        console.log('CSV updated successfully');\n      });\n  });\n\nreturn { updated: true, city_path: cityPath, status: success ? 'completed' : 'error' };"
+      },
+      "name": "Update CSV Final Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cleanup and logging\nconst fs = require('fs');\nconst logData = {\n  timestamp: new Date().toISOString(),\n  city: $node[\"Process City Data\"].json.city,\n  state: $node[\"Process City Data\"].json.state,\n  full_path: $node[\"Process City Data\"].json.full_path,\n  success: $node[\"Success/Error Branch\"].json.success,\n  restaurants_found: $node[\"Process Scraper Results\"].json?.total_restaurants || 0,\n  pages_scraped: $node[\"Process Scraper Results\"].json?.pages_scraped || 0,\n  error: $json.error || null\n};\n\n// Log to file\nfs.appendFileSync('/path/to/scraping_log.json', JSON.stringify(logData) + '\\n');\n\n// Clean up any temporary files\n// (Add cleanup code here if needed)\n\nconsole.log('Workflow completed for:', logData.city);\nreturn logData;"
+      },
+      "name": "Cleanup & Logging",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2660,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read CSV File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV File": {
+      "main": [
+        [
+          {
+            "node": "Filter Pending Cities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Pending Cities": {
+      "main": [
+        [
+          {
+            "node": "Process City Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process City Data": {
+      "main": [
+        [
+          {
+            "node": "Update CSV Status Running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CSV Status Running": {
+      "main": [
+        [
+          {
+            "node": "Execute Python Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Python Scraper": {
+      "main": [
+        [
+          {
+            "node": "Process Scraper Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Scraper Results": {
+      "main": [
+        [
+          {
+            "node": "Insert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Success/Error Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success/Error Branch": {
+      "main": [
+        [
+          {
+            "node": "Slack Success Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Success Notification": {
+      "main": [
+        [
+          {
+            "node": "Update CSV Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Error Notification": {
+      "main": [
+        [
+          {
+            "node": "Update CSV Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CSV Final Status": {
+      "main": [
+        [
+          {
+            "node": "Cleanup & Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "12345678-1234-1234-1234-123456789012",
+  "meta": {
+    "instanceId": "12345678-1234-1234-1234-123456789012"
+  },
+  "id": "1",
+  "tags": []
+} 

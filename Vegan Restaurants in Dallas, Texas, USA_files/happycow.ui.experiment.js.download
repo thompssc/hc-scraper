@@ -1,0 +1,84 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowUiExperiment = (function () {
+    const TYPE_A = 'A';
+    const TYPE_B = 'B';
+    const TYPE_C = 'C';
+    const EXPIRES = 1;
+
+    const defaultOptions = {
+        versionsCount: 2,
+    };
+
+    class UiExperiment {
+        constructor(options = defaultOptions) {
+            this._lStorage = new HappycowLocalStorage();
+            this._version = null;
+            this._versionCookie = null;
+            this._versionStorageItem = null;
+            this._options = Object.assign(cloneObj(defaultOptions), options);
+        }
+
+        setVersion(itemName, expires = EXPIRES) {
+            if (!itemName || !HappycowCookies || !this._lStorage) return;
+
+            if (instanceManager) {
+                instanceManager.set('uiExperiment', itemName, this);
+            }
+
+            this._versionCookie = HappycowCookies.getCookie(itemName);
+            this._versionStorageItem = this._lStorage.getItem(itemName);
+
+            if (!this._versionCookie && !this._versionStorageItem) {
+                this._version = this._chooseTypeOfVersion();
+                this._setData(itemName, expires);
+                return this._version;
+            }
+
+            if (!this._versionCookie && this._versionStorageItem) {
+                if (this._versionStorageItem == TYPE_A) {
+                    this._version = TYPE_B;
+                    this._setData(itemName, expires);
+                    return this._version;
+                }
+                if (this._versionStorageItem == TYPE_B && this._options.versionsCount === 3) {
+                    this._version = TYPE_C;
+                    this._setData(itemName, expires);
+                    return this._version;
+                }
+                this._version = TYPE_A;
+                this._setData(itemName, expires);
+                return this._version;
+            }
+
+            if (this._versionCookie == this._versionStorageItem) {
+                this._version = this._versionCookie;
+                return this._version;
+            }
+
+            if (this._versionCookie && !this._versionStorageItem) {
+                this._version = this._versionCookie;
+                this._lStorage.setItem(itemName, this._version);
+                return this._version;
+            }
+        }
+
+        _chooseTypeOfVersion() {
+            const typeVariants = this._options.versionsCount === 2 ? [TYPE_A, TYPE_B] : [TYPE_A, TYPE_B, TYPE_C];
+            const randomIndex = Math.floor(Math.random() * typeVariants.length);
+            return typeVariants[randomIndex];
+        }
+
+        _setData(itemName, expires = EXPIRES) {
+            if (!itemName) return;
+            HappycowCookies.setCookie(itemName, this._version, { expires, path: '/' });
+            this._lStorage.setItem(itemName, this._version);
+        }
+    }
+
+    return UiExperiment;
+})();

@@ -1,0 +1,123 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowMobileRoadblock = (function () {
+    const SHOW_TIMEOUT = 500;
+
+    class MobileRoadblock {
+        constructor() {
+            this._isOpen = false;
+            this._hasMatch = false;
+            this._canShowAd = parseInt(Config.viewSettings.mobile, 10);
+            this._canShowModalAuth = Config.viewSettings.login == true;
+            this._mobileAdViewCookieValue = null;
+            this._supportViewCookieValue = null;
+        }
+
+        init() {
+            if (!detectMobile()) return;
+            const matches = window.location.hash.match(/i=([^&]*)/);
+
+            this._hasMatch = matches ? matches[1] : false;
+            this._mobileViewCookieValue = HappycowCookies.getCookie('hc-mobile-view');
+            this._mobileAdViewCookieValue = HappycowCookies.getCookie('hc-mobile-ad-view');
+            this._supportViewCookieValue = HappycowCookies.getCookie('hc-support-view');
+
+            if (!this._mobileViewCookieValue) {
+                this._mobileViewCookieValue = 0;
+            }
+
+            if (!this._mobileAdViewCookieValue) {
+                this._mobileAdViewCookieValue = 0;
+            }
+
+            if (!this._supportViewCookieValue) {
+                this._supportViewCookieValue = 0;
+            }
+
+            this._mobileViewCookieValue++;
+            HappycowCookies.setCookie('hc-mobile-view', this._mobileViewCookieValue, { expires: 0, path: '/', samesite: 'Lax', secure: true });
+
+            pubSub.subscribe('userData', ({ hasApp, username }) => {
+                setTimeout(() => {
+                    if (!this._isOpen) {
+                        if (!hasApp && parseInt(this._mobileAdViewCookieValue, 10) === 0 && parseInt(this._mobileViewCookieValue, 10) === 3) {
+                            this._loadMobileAd();
+                            return;
+                        }
+                        if (!username) {
+                            this._showModalAuth();
+                        }
+                    }
+                }, SHOW_TIMEOUT);
+            });
+        }
+
+        _showModalAuth() {
+            const canShow = this._hasMatch && document.querySelectorAll('#web-listing, #web-listingImages').length > 0;
+
+            this._supportViewCookieValue++;
+            HappycowCookies.setCookie('hc-support-view', this._supportViewCookieValue, { expires: 1, path: '/', samesite: 'Lax', secure: true });
+
+            if (this._supportViewCookieValue > 12 && !canShow && this._canShowModalAuth && !hcModal.isOpened()) {
+                hcClickObserver.init();
+                hcModal.show('#authentication-modal', '', false);
+                this._isOpen = true;
+                HappycowAnalytics.triggerEvent(4, { view: this._supportViewCookieValue });
+                HappycowAnalytics.gtagEventCheck('#web-listing', 'auth_modal', {
+                    source: 'listing_details',
+                    trigger: 'session_pageview_limit',
+                });
+                HappycowAnalytics.gtagEventCheck('#web-home', 'auth_modal', {
+                    source: 'home',
+                    trigger: 'session_pageview_limit',
+                });
+            }
+        }
+
+        _loadMobileAd(mobileAdView) {
+            if (!document.getElementById('web-home') && !document.getElementById('web-listing') && !this._canShowAd && this._hasMatch) return;
+
+            const os = getMobileOperatingSystem();
+            this._mobileAdViewCookieValue = parseInt(this._mobileAdViewCookieValue, 10) + 1;
+            HappycowCookies.setCookie('hc-mobile-ad-view', this._mobileAdViewCookieValue, { expires: 0, path: '/' });
+
+            get(`/ajax/views/mobile?type=${os}`, { target: false })
+                .then(({ data }) => {
+                    requestAnimationFrame(() => {
+                        appendContent('body', data);
+                        requestIdleCallback(() => {
+                            this._events();
+                            hcModal.show('#modal-mobile-ad');
+                            this._isOpen = true;
+                        });
+                        if (document.querySelector('.get-mobile')) {
+                            HappycowAnalytics.triggerEvent(0, { view: mobileAdView });
+                        }
+                    });
+                })
+                .catch((error) => {
+                    this._isOpen = false;
+                    HappycowErrorReporter.logError({ error }, false);
+                });
+        }
+
+        _events() {
+            addLiveEventListener('click', '.close-ad, .get-mobile #go-to-full-site-content', (e) => {
+                e.preventDefault();
+                hcModal.close('#modal-mobile-ad');
+            });
+
+            addLiveEventListener('click', '#modal-mobile-ad .modal-content', (e) => {
+                if (e.target.classList.contains('close-ad')) return;
+                hcModal.close('#modal-mobile-ad');
+                HappycowAnalytics.triggerEvent(1);
+            });
+        }
+    }
+
+    return MobileRoadblock;
+})();

@@ -1,0 +1,106 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowSocial = (function () {
+    class Social {
+        loadTwitterX() {
+            window.twttr = ((d, s, id) => {
+                const fjs = d.getElementsByTagName(s)[0];
+                const t = window.twttr || {};
+                if (d.getElementById(id)) return t;
+                const js = d.createElement(s);
+                js.id = id;
+                js.src = Config.twitterX.widgetsUrl;
+                fjs.parentNode.insertBefore(js, fjs);
+
+                t._e = []; // eslint-disable-line no-underscore-dangle
+                t.ready = function (f) {
+                    t._e.push(f); // eslint-disable-line no-underscore-dangle
+                };
+
+                return t;
+            })(document, 'script', 'twitter-wjs');
+        }
+
+        loadFacebook() {
+            const script = document.querySelector('#facebook-jssdk');
+            if (!script) {
+                ((d, s, id) => {
+                    const fjs = d.getElementsByTagName(s)[0];
+                    if (d.getElementById(id)) return;
+                    const js = d.createElement(s);
+                    js.id = id;
+                    js.src = Config.facebook.sdkUrl;
+                    js.onload = () => {
+                        this._facebookCallback();
+                    };
+                    fjs.parentNode.insertBefore(js, fjs);
+                })(document, 'script', 'facebook-jssdk');
+            }
+        }
+
+        loadGoogleSearch() {
+            const gcse = document.createElement('script');
+            gcse.type = 'text/javascript';
+            gcse.async = true;
+            gcse.rel = 'preconnect';
+            gcse.src = `${Config.google.cseUrl}?cx=${Config.google.cseKey}`;
+            const s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(gcse, s);
+        }
+
+        loadYoutube() {
+            const v = document.getElementsByClassName('youtube-player');
+            for (let n = 0; n < v.length; n++) {
+                const p = document.createElement('div');
+                p.innerHTML = this._youtubeThumb(v[n].getAttribute('data-id'));
+                p.onclick = this._youtubeFrame;
+                v[n].appendChild(p);
+            }
+        }
+
+        _facebookCallback() {
+            window.fbAsyncInit = () => {
+                FB.init({
+                    appId: document.querySelector('div#params').dataset.fbAppid,
+                    cookie: true, // enable cookies to allow the server to access
+                    xfbml: true,
+                    version: 'v8.0',
+                });
+            };
+        }
+
+        _youtubeThumb(id) {
+            return `
+                <img class="youtube-thumb block m-auto w-full absolute h-50 object-cover inset-0 p-0 rounded-lg" src="${Config.urls.ytImg}/${id}/mqdefault.jpg" alt="HappyCow YouTube video">
+                <div class="play-button absolute w-20 h-12 rounded-md text-center bg-red-500 flex items-center justify-center top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 -mt-3" aria-hidden="true">
+                    <svg class="text-white w-10 h-10" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                        <path d="M311.869-268.456v-423.088q0-19.63 13.674-32.565 13.674-12.935 31.827-12.935 5.717 0 12.054 1.62 6.337 1.619 12.054 5.098l333.174 211.782q10.196 6.718 15.413 17.033 5.218 10.315 5.218 21.511t-5.218 21.511q-5.217 10.315-15.413 17.033L381.478-229.674q-5.717 3.479-12.054 5.098-6.337 1.62-12.054 1.62-18.153 0-31.827-12.935-13.674-12.935-13.674-32.565Z"/>
+                    </svg>
+                </div>
+            `;
+        }
+
+        _youtubeFrame() {
+            const overlay = document.querySelector('.video-overlay');
+            if (overlay) overlay.remove();
+            const iframe = document.createElement('iframe');
+            iframe.setAttribute(
+                'src',
+                `${Config.urls.ytEmbed}/${this.parentNode.getAttribute(
+                    'data-id'
+                )}?autoplay=1&autohide=2&border=0&wmode=opaque&enablejsapi=1&controls=1&showinfo=0`
+            );
+            iframe.setAttribute('frameborder', '0');
+            iframe.setAttribute('class', 'absolute border-0 inset-y-0 inset-x-0 w-full h-full');
+            iframe.setAttribute('allowfullscreen', '');
+            iframe.setAttribute('id', 'youtube-iframe');
+            this.parentNode.replaceChild(iframe, this);
+        }
+    }
+
+    return Social;
+})();

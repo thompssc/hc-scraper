@@ -1,0 +1,162 @@
+{
+  "name": "HappyCow Intelligent Scraper - Starter",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "C:/Source/hc-scraper/city_listings.csv",
+        "options": {
+          "delimiter": ","
+        }
+      },
+      "id": "2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
+      "name": "Load City Data",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r",
+      "name": "Process One City",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.happycow.net/ajax/views/city/venues/{{$json.full_path}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/javascript, */*; q=0.01"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "id": "4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s",
+      "name": "Get Sample Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple analysis for testing\nconst cityData = $input.all()[0].json;\nconst ajaxResponse = $input.all()[1].json;\n\n// Extract basic info\nconst city = cityData.city;\nconst state = cityData.state;\nconst totalListings = cityData.entries;\n\n// Simple threshold logic for testing\nlet minReviews = 5;\nlet maxRestaurants = 50;\n\n// Adjust for city size\nif (totalListings < 30) {\n  minReviews = 2;\n  maxRestaurants = Math.min(totalListings, 20);\n} else if (totalListings > 200) {\n  minReviews = 8;\n  maxRestaurants = 100;\n}\n\nreturn {\n  city: city,\n  state: state,\n  full_path: cityData.full_path,\n  total_available: totalListings,\n  min_review_threshold: minReviews,\n  max_restaurants: maxRestaurants,\n  sample_data: ajaxResponse.data ? ajaxResponse.data.substring(0, 500) : 'No data',\n  reasoning: `For ${city} with ${totalListings} listings, using threshold of ${minReviews} reviews and max ${maxRestaurants} restaurants`\n};"
+      },
+      "id": "5e6f7g8h-9i0j-1k2l-3m4n-5o6p7q8r9s0t",
+      "name": "Calculate Thresholds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "=C:/Source/hc-scraper/results/{{$json.city}}_{{$json.state}}_analysis.json",
+        "fileContent": "={{JSON.stringify($json, null, 2)}}",
+        "options": {}
+      },
+      "id": "6f7g8h9i-0j1k-2l3m-4n5o-6p7q8r9s0t1u",
+      "name": "Save Analysis",
+      "type": "n8n-nodes-base.writeFile",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load City Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load City Data": {
+      "main": [
+        [
+          {
+            "node": "Process One City",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process One City": {
+      "main": [
+        [
+          {
+            "node": "Get Sample Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sample Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Thresholds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Thresholds": {
+      "main": [
+        [
+          {
+            "node": "Save Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-25T22:35:00.000Z",
+  "versionId": "1"
+} 

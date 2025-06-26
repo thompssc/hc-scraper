@@ -1,0 +1,127 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowUrlUtils = (function () {
+    const scannerUrl =
+        /(https?:\/\/([^\s{}[\]"'`~\\<>()]+)(?:\([^(){}[\]"'`~\\<>\s]*\)|[^(){}[\]"'`~\\<>\s])*)|(www\.([^\s{}[\]"'`~\\<>()]+)(?:\([^(){}[\]"'`~\\<>\s]*\)|[^(){}[\]"'`~\\<>\s])*)/g;
+
+    const anchorTemplate = (url) =>
+        `<a href="${url}" target="_blank" rel="nofollow" class="break-words text-primary-500 transition-color hover:text-primary-300 duration-200">${url}</a>`;
+
+    class UrlUtils {
+        setHistory(params, type, name, divider) {
+            divider = typeof divider !== 'undefined' ? divider : '?';
+            if (window.history && window.history.pushState) {
+                const searchParams = new URLSearchParams(params);
+                const urlParams = searchParams.toString();
+                let historyUrl = window.location.pathname;
+                if (urlParams.length > 0) {
+                    historyUrl = window.location.pathname + divider + searchParams.toString();
+                }
+                window.history.pushState({ type: type }, name, historyUrl);
+            }
+        }
+
+        setHistoryUrl(url, type, name) {
+            let state = { type: type };
+            if (typeof type === 'object' && type !== null) {
+                state = type;
+            }
+            if (window.history && window.history.pushState) {
+                window.history.pushState(state, name, url);
+            }
+        }
+
+        back() {
+            if (window.history) {
+                window.history.back();
+            }
+        }
+
+        getUrlParameter(sParam) {
+            const sPageURL = decodeURIComponent(window.location.search.substring(1));
+
+            const searchParams = new URLSearchParams(sPageURL);
+            if (searchParams.has(sParam)) {
+                return searchParams.get(sParam);
+            }
+        }
+
+        checkUrlPath(sPath) {
+            if (window.location.pathname.match(sPath)) {
+                return true;
+            }
+            return false;
+        }
+
+        detectUrls(text) {
+            if (!text) {
+                return false;
+            }
+
+            const state = {
+                validUrls: [],
+            };
+
+            const cleanText = text.replace(/&nbsp;/g, ' &nbsp;');
+
+            return new Promise((resolve, reject) => {
+                const allUrls = cleanText.split(scannerUrl).filter((item) => scannerUrl.test(item));
+                let formattedText = cleanText;
+
+                if (allUrls.length < 1) {
+                    return resolve(cleanText);
+                }
+
+                allUrls.forEach((item) => {
+                    const isValidURL = hcValidator.validateURL(item);
+                    if (isValidURL.valid) {
+                        state.validUrls.push(isValidURL);
+                    }
+                });
+
+                state.validUrls = state.validUrls.filter((url, index, arr) => arr.findIndex((url2) => url2.href === url.href) === index);
+
+                const encodeUrls = state.validUrls.map((item) => `urls[]=${encodeURIComponent(item.href)}`);
+                const encodeURLText = encodeUrls.join('&');
+
+                get(`/ajax/url/check?${encodeURLText}`, { target: false })
+                    .then(({ message, success }) => {
+                        if (success && message && message.length > 0) {
+                            message.forEach((item) => {
+                                formattedText = this.formatText(formattedText, state.validUrls, item.url, item.trusted);
+                            });
+                            return resolve(formattedText);
+                        }
+                        if (success) {
+                            return resolve(text);
+                        }
+                        return reject(UI_ERROR_MESSAGES.fallback);
+                    })
+                    .catch((error) => {
+                        return reject(error || UI_ERROR_MESSAGES.fallback);
+                    });
+            });
+        }
+
+        formatText(text, Urls, validUrl, isTrusted) {
+            const replaceTextToURL = text.replace(scannerUrl, (url) => {
+                for (const item of Urls) {
+                    if (item.oldURL === url && item.href === validUrl) {
+                        if (isTrusted) {
+                            return anchorTemplate(url);
+                        }
+                        return anchorTemplate(item.cleanURL);
+                    }
+                }
+                return url;
+            });
+            return replaceTextToURL;
+        }
+    }
+
+    return UrlUtils;
+})();

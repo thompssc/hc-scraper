@@ -1,0 +1,338 @@
+(() => {
+    const RECAPTCHA_FORGOT_PASSWORD = 1;
+    const RECAPTCHA_REGISTER = 2;
+
+    let recaptchaType = null;
+
+    const authenticationModal = document.querySelector('#authentication-modal');
+
+    const register = new HappycowFormRegister();
+    register.init('form#modal-register-form');
+
+    if (!authenticationModal) return;
+
+    const navItemLogin = authenticationModal.querySelector('.nav-item-login');
+    const loginTab = authenticationModal.querySelector('#login-tab');
+
+    const recaptchaAuthentication = document.querySelector('.g-recaptcha-authentication');
+
+    addLiveEventListener('click', '#authentication-modal .nav-item-register a', () => {
+        authenticationModal.classList.add('modal-register-step-1');
+        HappycowAnalytics.gtagEvent('signup_start');
+        getRegisterFirstStepView();
+    });
+
+    addLiveEventListener('click', '#authentication-modal .nav-item-login a', () => {
+        authenticationModal.classList.remove('modal-register-step-1');
+    });
+
+    addLiveEventListener('click', '#authentication-modal .modal-close', (e) => {
+        if (authenticationModal.classList.contains('modal-register-step-2')) {
+            e.stopPropagation();
+            hcModal.confirmExit();
+            HappycowAnalytics.gtagEvent('signup_exit_popup');
+            return;
+        }
+        if (!authenticationModal.classList.contains('modal-register-step-3')) {
+            HappycowAnalytics.gtagEvent('auth_cancel');
+        }
+        backToLoginTab();
+        hcModal.deleteNotification();
+    });
+
+    addLiveEventListener('click', '#authentication-modal .btn-register-success', () => {
+        hcModal.close('#authentication-modal');
+        backToLoginTab();
+    });
+
+    addLiveEventListener('click', '#modal-register-form .btn-toggler-next', () => {
+        const registerForm = authenticationModal.querySelector('#modal-register-form');
+        hcValidator
+            .check(registerForm, false, true)
+            .then((result) => {
+                if (!result) {
+                    HappycowToastr.error('Please complete the required fields');
+                    return;
+                }
+                register.setState();
+                getRegisterSecondStepView();
+                HappycowAnalytics.gtagEvent('signup_next');
+            })
+            .catch((e) => {
+                HappycowToastr.error('Please complete the required fields');
+            });
+    });
+
+    addLiveEventListener('click', 'body', (e) => {
+        if (e.target.classList.contains('modal-login')) {
+            if (authenticationModal.classList.contains('modal-register-step-2')) {
+                e.stopPropagation();
+                HappycowAnalytics.gtagEvent('signup_exit_popup');
+                return;
+            }
+            if (!authenticationModal.classList.contains('modal-register-step-3')) {
+                HappycowAnalytics.gtagEvent('auth_cancel');
+            }
+            backToLoginTab();
+            hcModal.deleteNotification();
+        }
+    });
+
+    addLiveEventListener('click', '.alert-confirm-exit .alert-btn-confirm', () => {
+        backToLoginTab();
+        HappycowAnalytics.gtagEvent('auth_cancel');
+    });
+
+    addLiveEventListener('shown.hc.modal', '#authentication-modal', (e) => {
+        hcGoogleRecaptcha.setGoogleRecaptcha();
+        hcSocial.loadFacebook();
+        hcSidebar.close();
+        loadGoogleButton('.modal-login-google');
+        if (window.innerWidth < 1200) {
+            document.body.classList.add('scroll-off');
+        }
+        if (authenticationModal.classList.contains('open-register')) {
+            authenticationModal.classList.add('modal-register-step-1');
+            HappycowAnalytics.gtagEvent('signup_start');
+            getRegisterFirstStepView();
+            navItemLogin.classList.remove('active');
+            loginTab.classList.remove('active');
+            document.querySelector('#authentication-modal .nav-item-register').classList.add('active');
+            document.querySelector('#authentication-modal #register-tab').classList.add('active');
+            document.querySelector('#authentication-modal #register-tab').classList.remove('hidden');
+            return;
+        }
+        if (!navItemLogin.classList.contains('active')) {
+            backToLoginTab();
+        }
+    });
+
+    addLiveEventListener('hidden.hc.modal', '#authentication-modal', () => {
+        if (window.innerWidth < 1200) {
+            document.body.classList.remove('scroll-off');
+        }
+        if (authenticationModal.classList.contains('open-register')) {
+            authenticationModal.classList.remove('open-register');
+            backToLoginTab();
+        }
+    });
+
+    addLiveEventListener('click', '#authentication-modal .btn-forgot-password-toggle', () => {
+        authenticationModal.classList.toggle('modal-auth-full-width');
+        navItemLogin.classList.toggle('active');
+        loginTab.classList.toggle('active');
+
+        document.querySelector('#authentication-modal #recovery-member-tab').classList.toggle('active');
+        document.querySelector('#authentication-modal #recovery-member-tab').classList.toggle('hidden');
+
+        const alertBox = document.querySelector('#authentication-modal .modal-notification');
+        if (!loginTab.classList.contains('active')) {
+            if (alertBox) alertBox.classList.add('hidden');
+            return;
+        }
+
+        if (alertBox) alertBox.classList.remove('hidden');
+    });
+
+    addLiveEventListener('submit', '#modal-forgot-password-form', (e) => {
+        e.preventDefault();
+
+        const forgotPasswordForm = document.querySelector('#modal-forgot-password-form');
+        hcValidator
+            .check(forgotPasswordForm, false, true)
+            .then((result) => {
+                if (!result) {
+                    return;
+                }
+                if (recaptchaAuthentication) {
+                    recaptchaType = RECAPTCHA_FORGOT_PASSWORD;
+                    grecaptcha.execute(0);
+                    return;
+                }
+                forgotPassword(false);
+            })
+            .catch((error) => {
+                recaptchaType = null;
+                if (recaptchaAuthentication) grecaptcha.reset(0);
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    });
+
+    addLiveEventListener('click', '#authentication-modal .register-container .btn-toggler-prev', () => {
+        document.querySelector('.register-form-container').classList.add('hidden');
+        register.setState();
+        authenticationModal.classList.remove('modal-auth-full-width', 'modal-register-step-2');
+        authenticationModal.classList.add('modal-register-step-1');
+        authenticationModal.querySelector('.modal-dialog-right').classList.add('lg:min-h-159');
+        getRegisterFirstStepView();
+    });
+
+    addLiveEventListener('submit', '#authentication-modal #modal-register-form', (e) => {
+        e.preventDefault();
+        const registerForm = authenticationModal.querySelector('#modal-register-form');
+        hcValidator
+            .check(registerForm, false, true)
+            .then((result) => {
+                if (!result) {
+                    HappycowToastr.error('Please complete the required fields');
+                    return;
+                }
+                register.setState();
+                if (recaptchaAuthentication) {
+                    recaptchaType = RECAPTCHA_REGISTER;
+                    grecaptcha.execute(0);
+                    return;
+                }
+
+                register.register(null, '#authentication-modal .register-form-container', true);
+            })
+            .catch((error) => {
+                recaptchaType = null;
+                if (recaptchaAuthentication) grecaptcha.reset(0);
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    });
+
+    function setupRegisterFirstStep() {
+        if (document.querySelector('.register-form-container').classList.contains('hidden')) {
+            document.querySelector('.register-form-container').classList.remove('hidden');
+            authenticationModal.querySelector('#dialog-register-step-1').classList.add('fadeIn');
+            authenticationModal.querySelector('.modal-dialog-right').classList.remove('lg:min-h-159');
+            document.body.classList.remove('recaptcha-scroll');
+        }
+        register.setItemValue();
+    }
+
+    function setupRegisterSecondStep() {
+        authenticationModal.classList.remove('modal-register-step-1');
+        authenticationModal.classList.add('modal-auth-full-width', 'modal-register-step-2');
+
+        document.body.classList.add('recaptcha-scroll');
+
+        const typeahead = new HappycowTypeahead();
+
+        typeahead.init('#modal-register-location', {
+            sources: {
+                places: {
+                    display: true,
+                    displayHeader: false,
+                },
+            },
+            selected: function (obj) {
+                document.querySelector('#modal-register-location').value = `${obj.city}, ${obj.country}`;
+            },
+        });
+
+        register.setItemValue();
+    }
+
+    function getRegisterFirstStepView() {
+        get('/ajax/views/register/1', { target: false })
+            .then((result) => {
+                document.querySelector('#authentication-modal .register-placeholder').classList.add('hidden');
+                emptyElement('#authentication-modal .register-form-container');
+                appendContent('#authentication-modal .register-form-container', result.data);
+                document.querySelector('#authentication-modal').setAttribute('data-confirm-exit', 'false');
+                setupRegisterFirstStep();
+                dispatchCustomEvent(document.querySelector('#authentication-modal .register-form-container'), 'shown.hc.registration');
+                if (!document.querySelector('#authentication-modal .register-socials .btn-google-auth iframe')) {
+                    loadGoogleButton('#authentication-modal .register-socials .modal-login-google');
+                }
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function getRegisterSecondStepView() {
+        get('/ajax/views/register/2', { target: false })
+            .then((result) => {
+                emptyElement('#authentication-modal .register-form-container');
+                appendContent('#authentication-modal .register-form-container', result.data);
+                hcModal.deleteNotification();
+                document.querySelector('#authentication-modal').setAttribute('data-confirm-exit', 'true');
+                setupRegisterSecondStep();
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function backToLoginTab() {
+        const registerTab = authenticationModal.querySelector('#authentication-modal #register-tab');
+        const forgotPasswordTab = authenticationModal.querySelector('#authentication-modal #recovery-member-tab');
+
+        loginTab.classList.add('active');
+        loginTab.classList.remove('hidden');
+
+        document.querySelector('#authentication-modal .nav-item-register').classList.remove('active');
+        document.querySelector('#authentication-modal .nav-item-login').classList.add('active');
+        document.querySelector('#authentication-modal .register-placeholder').classList.remove('hidden');
+        document.querySelector('#authentication-modal').setAttribute('data-confirm-exit', 'false');
+        document.body.classList.remove('recaptcha-scroll');
+
+        emptyElement('#authentication-modal .register-form-container');
+
+        if (registerTab && registerTab.classList.contains('active')) {
+            registerTab.classList.remove('active');
+            registerTab.classList.add('hidden');
+            register.clearState();
+            if (authenticationModal.classList.contains('modal-register-step-3')) {
+                authenticationModal.classList.remove('modal-auth-full-width', 'modal-register-step-3');
+                return;
+            }
+            if (authenticationModal.classList.contains('modal-register-step-2')) {
+                authenticationModal.classList.remove('modal-auth-full-width', 'modal-register-step-2');
+                return;
+            }
+            authenticationModal.classList.remove('modal-register-step-1');
+            return;
+        }
+
+        if (forgotPasswordTab && forgotPasswordTab.classList.contains('active')) {
+            authenticationModal.classList.remove('modal-auth-full-width');
+            authenticationModal.querySelector('.nav-tabs').classList.remove('hidden');
+
+            forgotPasswordTab.classList.remove('active');
+            forgotPasswordTab.classList.add('hidden');
+        }
+    }
+
+    function forgotPassword(token) {
+        const forgotPasswordForm = document.querySelector('#modal-forgot-password-form');
+        const formData = new FormData(forgotPasswordForm);
+
+        document.body.classList.add('recaptcha-scroll');
+
+        formData.append(csrf.name, csrf.value);
+        formData.append('g-recaptcha-response', token);
+        if (recaptchaAuthentication) grecaptcha.reset(0);
+
+        post('/ajax/members/forgot-password', formData)
+            .then((data) => {
+                if (data.success) {
+                    emptyElement('#dialog-recovery-member');
+                    appendContent('#dialog-recovery-member', data.view);
+                    document.body.classList.remove('recaptcha-scroll');
+                    return;
+                }
+                HappycowToastr.error(data.message || UI_ERROR_MESSAGES.fallback);
+            })
+            .catch((error) => {
+                HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+            });
+    }
+
+    function authenticationOnSubmit(token) {
+        if (recaptchaType == RECAPTCHA_FORGOT_PASSWORD) {
+            forgotPassword(token);
+            return;
+        }
+        if (recaptchaType == RECAPTCHA_REGISTER) {
+            if (recaptchaAuthentication) grecaptcha.reset(0);
+            register.register(token, '#authentication-modal .register-form-container', true);
+        }
+    }
+
+    window.authenticationOnSubmit = authenticationOnSubmit;
+})();

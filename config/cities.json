@@ -1,0 +1,54 @@
+{
+  "cities": {
+    "New York": "https://www.happycow.net/north_america/usa/new_york/new_york/",
+    "Los Angeles": "https://www.happycow.net/north_america/usa/california/los_angeles/",
+    "Chicago": "https://www.happycow.net/north_america/usa/illinois/chicago/",
+    "San Francisco": "https://www.happycow.net/north_america/usa/california/san_francisco/",
+    "Austin": "https://www.happycow.net/north_america/usa/texas/austin/",
+    "Portland": "https://www.happycow.net/north_america/usa/oregon/portland/",
+    "Seattle": "https://www.happycow.net/north_america/usa/washington/seattle/",
+    "Denver": "https://www.happycow.net/north_america/usa/colorado/denver/",
+    "Atlanta": "https://www.happycow.net/north_america/usa/georgia/atlanta/",
+    "Miami": "https://www.happycow.net/north_america/usa/florida/miami/",
+    "Boston": "https://www.happycow.net/north_america/usa/massachusetts/boston/",
+    "Washington DC": "https://www.happycow.net/north_america/usa/district_of_columbia/washington/",
+    "Philadelphia": "https://www.happycow.net/north_america/usa/pennsylvania/philadelphia/",
+    "Las Vegas": "https://www.happycow.net/north_america/usa/nevada/las_vegas/",
+    "Phoenix": "https://www.happycow.net/north_america/usa/arizona/phoenix/",
+    "London": "https://www.happycow.net/europe/england/london/",
+    "Berlin": "https://www.happycow.net/europe/germany/berlin/",
+    "Paris": "https://www.happycow.net/europe/france/paris/",
+    "Amsterdam": "https://www.happycow.net/europe/netherlands/amsterdam/",
+    "Barcelona": "https://www.happycow.net/europe/spain/barcelona/",
+    "Rome": "https://www.happycow.net/europe/italy/rome/",
+    "Prague": "https://www.happycow.net/europe/czech_republic/prague/",
+    "Vienna": "https://www.happycow.net/europe/austria/vienna/",
+    "Stockholm": "https://www.happycow.net/europe/sweden/stockholm/",
+    "Copenhagen": "https://www.happycow.net/europe/denmark/copenhagen/",
+    "Tokyo": "https://www.happycow.net/asia/japan/tokyo/",
+    "Bangkok": "https://www.happycow.net/asia/thailand/bangkok/",
+    "Singapore": "https://www.happycow.net/asia/singapore/singapore/",
+    "Hong Kong": "https://www.happycow.net/asia/hong_kong/hong_kong/",
+    "Seoul": "https://www.happycow.net/asia/south_korea/seoul/",
+    "Mumbai": "https://www.happycow.net/asia/india/mumbai/",
+    "Delhi": "https://www.happycow.net/asia/india/delhi/",
+    "Tel Aviv": "https://www.happycow.net/asia/israel/tel_aviv/",
+    "Melbourne": "https://www.happycow.net/oceania/australia/victoria/melbourne/",
+    "Sydney": "https://www.happycow.net/oceania/australia/new_south_wales/sydney/",
+    "Toronto": "https://www.happycow.net/north_america/canada/ontario/toronto/",
+    "Vancouver": "https://www.happycow.net/north_america/canada/british_columbia/vancouver/",
+    "Montreal": "https://www.happycow.net/north_america/canada/quebec/montreal/"
+  },
+  "priority_cities": [
+    "New York", "Los Angeles", "London", "Berlin", "Tokyo", "San Francisco", "Austin", "Portland"
+  ],
+  "test_cities": [
+    "Austin", "Portland"
+  ],
+  "regions": {
+    "North America": ["New York", "Los Angeles", "Chicago", "San Francisco", "Austin", "Portland", "Seattle", "Denver", "Atlanta", "Miami", "Boston", "Washington DC", "Philadelphia", "Las Vegas", "Phoenix", "Toronto", "Vancouver", "Montreal"],
+    "Europe": ["London", "Berlin", "Paris", "Amsterdam", "Barcelona", "Rome", "Prague", "Vienna", "Stockholm", "Copenhagen"],
+    "Asia": ["Tokyo", "Bangkok", "Singapore", "Hong Kong", "Seoul", "Mumbai", "Delhi", "Tel Aviv"],
+    "Oceania": ["Melbourne", "Sydney"]
+  }
+} 

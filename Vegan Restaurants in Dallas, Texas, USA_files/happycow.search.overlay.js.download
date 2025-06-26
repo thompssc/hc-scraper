@@ -1,0 +1,149 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowSearchOverlay = (function () {
+    const CLASS_NAME_HIDDEN = UI_CONSTANTS.displayHidden;
+    const CLASS_NAME_SEARCH_OVERLAY_OPEN = 'search-overlay-open';
+
+    const SELECTOR_SEARCH_OVERLAY = '.search-overlay';
+    const SELECTOR_SEARCH_OVERLAY_RESULTS = '.search-overlay-results';
+
+    const INPUT_TIMEOUT = 200;
+
+    class SearchOverlay {
+        constructor() {
+            this._controller = null;
+            this._el = document.querySelector(SELECTOR_SEARCH_OVERLAY);
+            this._containerOffsetTop = 0;
+        }
+
+        init() {
+            this._events();
+        }
+
+        _setOverlayContainerHeight() {
+            if (!this._el) return;
+            if (document.body.classList.contains(CLASS_NAME_SEARCH_OVERLAY_OPEN)) {
+                document.body.style.setProperty('--search-overlay-height', `${window.innerHeight - this._containerOffsetTop}px`);
+            }
+        }
+
+        _overlaySearch(type, term) {
+            if (this._controller) this._controller.abort();
+            this._controller = new AbortController();
+            const { signal } = this._controller;
+            const urlParams = new URLSearchParams();
+            const searchOverlayResults = document.querySelector(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`);
+
+            urlParams.set('term', term);
+            this._setLoading(type, searchOverlayResults);
+
+            get(`/ajax/views/search/${type}/?${urlParams.toString()}`, { target: false, signal: signal })
+                .then(({ data }) => {
+                    if (!data) {
+                        document.querySelector(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`).classList.add(CLASS_NAME_HIDDEN);
+                        HappycowAnalytics.gtagEvent('site_search', {
+                            keyword: term,
+                            result_count: 0,
+                        });
+                        return;
+                    }
+                    const resultLength = this._countItems(data);
+                    requestAnimationFrame(() => {
+                        emptyElement(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`);
+                        appendContent(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`, data);
+                        searchOverlayResults.dataset.lastQuery = term;
+                        if (term.trim().length > 0) {
+                            HappycowAnalytics.gtagEvent('site_search', {
+                                keyword: term,
+                                result_count: resultLength,
+                            });
+                        }
+                    });
+                })
+                .catch((error) => {
+                    if (error.name !== 'AbortError') {
+                        HappycowErrorReporter.logError({ error }, UI_ERROR_MESSAGES.fallback);
+                    }
+                });
+        }
+
+        _countItems(data) {
+            let resultLength = 0;
+            if (data.includes('<li>')) {
+                const resultArray = data.split('<li>');
+                if (resultArray[0] === '') {
+                    resultArray.shift();
+                }
+                if (resultArray[resultArray.length - 1] === '') {
+                    resultArray.pop();
+                }
+                resultLength = resultArray.length;
+            }
+            return resultLength;
+        }
+
+        _setLoading(type, searchOverlayResults) {
+            requestAnimationFrame(() => {
+                searchOverlayResults.classList.remove(CLASS_NAME_HIDDEN);
+                emptyElement(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`);
+                appendContent(`#${type} ${SELECTOR_SEARCH_OVERLAY_RESULTS}`, '<li>Searching...</li>');
+            });
+        }
+
+        _events() {
+            window.addEventListener(
+                'resize',
+                debounce(() => {
+                    this._setOverlayContainerHeight();
+                }, UI_TIMEOUTS.resizeDebounce)
+            );
+
+            addLiveEventListener('click', '.btn-search-overlay', (e) => {
+                e.preventDefault();
+            });
+
+            addLiveEventListener('click', '.btn-toggle-search', (e) => {
+                e.stopPropagation();
+                document.body.classList.toggle(CLASS_NAME_SEARCH_OVERLAY_OPEN);
+                this._el.classList.toggle(CLASS_NAME_HIDDEN);
+                if (this._el.classList.contains(CLASS_NAME_HIDDEN)) {
+                    toggleBodyScroll();
+                    return;
+                }
+                this._containerOffsetTop = this._el.querySelector('.search-overlay-results-container').offsetTop;
+                this._setOverlayContainerHeight();
+                toggleBodyScroll();
+                hcDropdown.closeOpened();
+            });
+
+            addLiveEventListener('input', '.query-search-input.input-control', (e) => {
+                const searchType = e.target.closest('.tab-pane').getAttribute('id');
+                const queryValue = e.target.value;
+                document.querySelectorAll('.query-search-input').forEach((item) => {
+                    item.value = queryValue;
+                });
+                setTimeout(() => {
+                    this._overlaySearch(searchType, queryValue);
+                }, INPUT_TIMEOUT);
+            });
+
+            addLiveEventListener('shown.hc.tab', `${SELECTOR_SEARCH_OVERLAY} .nav-link`, (e) => {
+                const href = e.target.getAttribute('href');
+                const tabPane = document.querySelector('.tab-pane' + href);
+                if (!tabPane) return;
+                const searchType = tabPane.getAttribute('id');
+                const queryValue = tabPane.querySelector('.query-search-input.input-control').value;
+                const searchResults = tabPane.querySelector(SELECTOR_SEARCH_OVERLAY_RESULTS);
+                if (searchResults.dataset.lastQuery != queryValue) {
+                    this._overlaySearch(searchType, queryValue);
+                }
+            });
+        }
+    }
+
+    return SearchOverlay;
+})();

@@ -1,0 +1,202 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowFilters = (function () {
+    const CLASS_NAME_ACTIVE = UI_CONSTANTS.stateActive;
+    const CLASS_NAME_BTN_CHAINS_DISABLED = 'btn-chains-disabled';
+    const CLASS_NAME_HIDDEN = UI_CONSTANTS.displayHidden;
+    const CLASS_NAME_SELECTED = UI_CONSTANTS.stateSelected;
+    const CLASS_NAME_TEXT_COLOR = 'text-gray-600';
+    const CLASS_NAME_TEXT_COLOR_ACTIVE = '!text-white';
+
+    const SELECTOR_ACTIVE = `.${CLASS_NAME_ACTIVE}`;
+    const SELECTOR_BTN_CHAINS_DISABLED = `.${CLASS_NAME_BTN_CHAINS_DISABLED}`;
+    const SELECTOR_BTN_FILTER = '.btn-filter';
+    const SELECTOR_BTN_FILTER_ACTIVE = `${SELECTOR_BTN_FILTER}${SELECTOR_ACTIVE}`;
+    const SELECTOR_FILTER = `${SELECTOR_BTN_FILTER}.filter`;
+    const SELECTOR_FILTER_ACTIVE = `${SELECTOR_FILTER}${SELECTOR_ACTIVE}`;
+    const SELECTOR_FILTERS = '#filters';
+    const SELECTOR_FILTERS_GROUP = '.filters-group';
+    const SELECTOR_FILTER_HELPER = '.filter-helper';
+
+    class Filters {
+        init() {
+            addOnEventListener('click', '#filter-btn', (e) => {
+                e.preventDefault();
+                document.querySelector(SELECTOR_FILTERS_GROUP).classList.toggle(CLASS_NAME_HIDDEN);
+            });
+
+            addOnEventListener('click', `${SELECTOR_FILTERS} ${SELECTOR_FILTER}`, (e) => {
+                e.preventDefault();
+                const { target } = e;
+                this.setFilterStatus(target);
+                this.setToggleBtn();
+                this.setFilterCount();
+                this.handleChains();
+                dispatchCustomEvent(target, 'filter.click');
+            });
+
+            addOnEventListener('click', `${SELECTOR_FILTERS} ${SELECTOR_BTN_FILTER}.option`, (e) => {
+                e.preventDefault();
+                const { target } = e;
+                while ((item = target.parentElement.nextElementSibling)) {
+                    item.classList.remove(CLASS_NAME_ACTIVE, CLASS_NAME_SELECTED);
+                }
+                if (target.classList.contains(CLASS_NAME_ACTIVE)) {
+                    target.classList.remove(CLASS_NAME_ACTIVE, CLASS_NAME_SELECTED);
+                    return;
+                }
+                target.classList.add(CLASS_NAME_ACTIVE, CLASS_NAME_SELECTED);
+            });
+
+            addOnEventListener('click', SELECTOR_FILTER_HELPER, (e) => {
+                e.preventDefault();
+                this.setStoreToggle();
+                this.setFilterCount();
+                dispatchCustomEvent(e.target, 'filter.helper.click');
+            });
+
+            return this;
+        }
+
+        setToggleBtn() {
+            const helper = document.querySelector(SELECTOR_FILTER_HELPER);
+            if (!helper) return this;
+
+            const storesNotActive = document.querySelectorAll(
+                `${SELECTOR_FILTERS_GROUP} ${SELECTOR_BTN_FILTER}:not(${SELECTOR_ACTIVE}):not(${SELECTOR_FILTER_HELPER})`
+            );
+            if (storesNotActive.length != 0) {
+                helper.dataset.toggle = 0;
+                helper.innerText = 'Select All';
+                return this;
+            }
+            helper.dataset.toggle = 1;
+            helper.innerText = 'Unselect All';
+            return this;
+        }
+
+        setFilterStatus(elem) {
+            const label = elem.dataset.label;
+            if (elem.classList.contains(CLASS_NAME_ACTIVE)) {
+                elem.classList.remove(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, `text-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                elem.classList.add(CLASS_NAME_TEXT_COLOR);
+                return;
+            }
+            elem.classList.add(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+            elem.classList.remove(CLASS_NAME_TEXT_COLOR);
+        }
+
+        unselectAll() {
+            document.querySelectorAll(SELECTOR_FILTER_ACTIVE).forEach((item) => {
+                const label = item.dataset.label;
+                item.classList.remove(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, `text-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                item.classList.add(CLASS_NAME_TEXT_COLOR);
+            });
+            this.setToggleBtn();
+        }
+
+        setFilterCount() {
+            const count = document.querySelectorAll(`${SELECTOR_FILTERS_GROUP} ${SELECTOR_FILTER_ACTIVE}`).length;
+            const filterCount = document.querySelector('#filters-count');
+            if (filterCount) filterCount.innerText = count;
+            return this;
+        }
+
+        handleChains() {
+            let allFiltersActive = false;
+            const activeFilterRestaurants = document.querySelectorAll(
+                `${SELECTOR_FILTERS} .restaurant-filters ${SELECTOR_FILTER_ACTIVE}:not(.chains):not(${SELECTOR_BTN_CHAINS_DISABLED})`
+            );
+            const activeFilterStores = document.querySelectorAll(
+                `${SELECTOR_FILTERS} ${SELECTOR_FILTERS_GROUP} ${SELECTOR_BTN_FILTER_ACTIVE}:not(${SELECTOR_BTN_CHAINS_DISABLED})`
+            );
+            if (activeFilterRestaurants.length === 0 && activeFilterStores.length === 0) {
+                allFiltersActive = true;
+            }
+
+            const chains = document.querySelector(`${SELECTOR_FILTER}[data-label="chains"]`);
+            if (!chains) return this;
+            const label = chains.dataset.label;
+            if (allFiltersActive) {
+                chains.classList.add(CLASS_NAME_ACTIVE, `border-${label}`, CLASS_NAME_BTN_CHAINS_DISABLED);
+                chains.classList.remove(CLASS_NAME_TEXT_COLOR, `bg-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                chains.parentElement.setAttribute('title', 'Select Veg-Options to use');
+                return this;
+            }
+
+            const isVegOptionFilterActive = document.querySelectorAll(`${SELECTOR_FILTER_ACTIVE}[data-label="veg-options"]`).length;
+            if (isVegOptionFilterActive === 0) {
+                chains.classList.remove(
+                    CLASS_NAME_ACTIVE,
+                    `border-${label}`,
+                    `bg-${label}`,
+                    CLASS_NAME_BTN_CHAINS_DISABLED,
+                    `text-${label}`,
+                    CLASS_NAME_TEXT_COLOR_ACTIVE
+                );
+                chains.classList.add(CLASS_NAME_TEXT_COLOR, CLASS_NAME_BTN_CHAINS_DISABLED);
+                chains.parentElement.setAttribute('title', 'Select Veg-Options to use');
+                return this;
+            }
+            if (chains.classList.contains(CLASS_NAME_ACTIVE)) {
+                chains.classList.remove(CLASS_NAME_BTN_CHAINS_DISABLED);
+                chains.classList.add(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`);
+                chains.parentElement.setAttribute('title', 'Toggle Veg-Option businesses with many locations');
+                return this;
+            }
+
+            chains.classList.add(CLASS_NAME_TEXT_COLOR);
+            chains.classList.remove(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, CLASS_NAME_BTN_CHAINS_DISABLED, `text-${label}`);
+            return this;
+        }
+
+        setStoreToggle() {
+            const helper = document.querySelector(SELECTOR_FILTER_HELPER);
+            const toggle = helper.dataset.toggle;
+            const stores = document.querySelectorAll(`${SELECTOR_FILTERS_GROUP} ${SELECTOR_BTN_FILTER}:not(${SELECTOR_FILTER_HELPER})`);
+            if (toggle == 1) {
+                stores.forEach((item) => {
+                    const label = item.dataset.label;
+                    item.classList.remove(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, `text-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                    item.classList.add(CLASS_NAME_TEXT_COLOR);
+                });
+                helper.innerText = 'Select All';
+                helper.dataset.toggle = 0;
+                return this;
+            }
+
+            stores.forEach((item) => {
+                const label = item.dataset.label;
+                item.classList.add(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, `text-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                item.classList.remove(CLASS_NAME_TEXT_COLOR);
+            });
+            helper.innerText = 'Unselect All';
+            helper.dataset.toggle = 1;
+            return this;
+        }
+
+        setFiltersActive() {
+            const filters = document.querySelectorAll(SELECTOR_FILTER);
+            filters.forEach((item) => {
+                const label = item.dataset.label;
+                item.classList.remove(CLASS_NAME_ACTIVE, `border-${label}`, `bg-${label}`, `text-${label}`, CLASS_NAME_TEXT_COLOR_ACTIVE);
+                item.classList.add(CLASS_NAME_TEXT_COLOR);
+            });
+            return this;
+        }
+
+        setStoresVisibility() {
+            const activeStores = document.querySelectorAll(`${SELECTOR_FILTERS} ${SELECTOR_FILTERS_GROUP} ${SELECTOR_BTN_FILTER_ACTIVE}`);
+            if (activeStores.length > 0) {
+                document.querySelector(SELECTOR_FILTERS_GROUP).classList.remove(CLASS_NAME_HIDDEN);
+            }
+            return this;
+        }
+    }
+
+    return Filters;
+})();

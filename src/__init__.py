@@ -1,0 +1,1 @@
+# HappyCow Scraper package 

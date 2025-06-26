@@ -1,0 +1,562 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowTypeahead = (function () {
+    const CLASS_NAME_HIDDEN = UI_CONSTANTS.displayHidden;
+
+    const CLASS_NAME_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION = 'typeahead-autocomplete-suggestion';
+    const CLASS_NAME_TYPEAHEAD_LISTBOX = 'typeahead-listbox';
+    const CLASS_NAME_TYPEAHEAD_LISTBOX_CONTAINER = 'typeahead-listbox-container';
+    const CLASS_NAME_TYPEAHEAD_LISTBOX_HEADER = 'typeahead-listbox-header';
+    const CLASS_NAME_TYPEAHEAD_LISTOBX_HEADER_TITLE = 'typeahead-listbox-header-title';
+
+    const DISPLAY_ITEMS_LIMIT = 3;
+    const KEY_UP_DEBOUNCE_TIMEOUT = 250;
+
+    const SELECTOR_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION = `.${CLASS_NAME_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION}`;
+    const SELECTOR_TYPEAHAED_LISTBOX = `.${CLASS_NAME_TYPEAHEAD_LISTBOX}`;
+
+    const defaultOptions = {
+        containerItemTemplate: null,
+        history: {
+            display: false,
+            displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+            displayHeader: true,
+            displayOrder: 1,
+            headerTitle: 'History',
+            headerMarginTopCss: 'mt-3',
+        },
+        listboxCss: [],
+        selected: null,
+        sources: {
+            geonames: {
+                customItemTemplate: null,
+                display: false,
+                displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+                displayHeader: true,
+                displayOrder: 2,
+                headerTitle: 'Geonames',
+                headerMarginTopCss: 'mt-3',
+            },
+            google: {
+                customItemTemplate: null,
+                display: false,
+                displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+                displayHeader: true,
+                displayOrder: 2,
+                headerTitle: 'More results from the net...',
+                headerMarginTopCss: 'mt-3',
+            },
+            places: {
+                customItemTemplate: null,
+                display: false,
+                displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+                displayHeader: true,
+                displayOrder: 2,
+                headerTitle: 'Locations',
+                headerMarginTopCss: 'mt-3',
+            },
+            users: {
+                customItemTemplate: null,
+                display: false,
+                displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+                displayHeader: true,
+                displayOrder: 2,
+                headerTitle: 'Users',
+                headerMarginTopCss: 'mt-3',
+            },
+            venues: {
+                customItemTemplate: null,
+                display: false,
+                displayItemsLimit: DISPLAY_ITEMS_LIMIT,
+                displayHeader: true,
+                displayOrder: 2,
+                headerTitle: 'Restaurants and Stores',
+                headerMarginTopCss: 'mt-3',
+            },
+        },
+    };
+
+    const listboxHeaderTemplate = (title, marginTop) =>
+        `<div class="${CLASS_NAME_TYPEAHEAD_LISTBOX_HEADER} ${marginTop} mb-1 mx-5"><h3 class="${CLASS_NAME_TYPEAHEAD_LISTOBX_HEADER_TITLE} text-xl text-primary-500 border-gray-300 border-b pb-1">${title}</h3></div>`;
+    const listboxTemplate = (id) =>
+        `<div id="${id}" class="${CLASS_NAME_TYPEAHEAD_LISTBOX} flex flex-col bg-white absolute z-10 w-full rounded-md mt-2 py-3 shadow-dropdown ${CLASS_NAME_HIDDEN}" role="listbox" aria-expanded="false"></div>`;
+    const listboxContainerTemplate = (id, template = '', css = '') =>
+        `<div id="${id}" class="${CLASS_NAME_TYPEAHEAD_LISTBOX_CONTAINER} ${css}" role="presentation">${template}</div>`;
+    const listboxItemTemplate = (template) =>
+        `<div role="option" class="${CLASS_NAME_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION} block w-full text-base font-normal py-2 px-5 cursor-pointer hover:bg-gray-100">${template}</div>`;
+
+    const iconFriendTemplate = `
+        <svg class="happycow-friend inline-flex h-4 w-4 ml-px mr-[5px] -mt-1 text-yellow-500" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor">
+            <path fill="#ffcc00" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+        </svg>
+    `;
+    const iconLocationTemplate = `
+        <svg class="text-gray-600 h-5 w-5 -mt-1 inline-flex mr-0.5" viewBox="0 -960 960 960" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+            <path d="M480-192.457q120.326-110.087 178.728-198.597 58.402-88.511 58.402-161.903 0-107.318-68.671-175.746-68.672-68.427-168.467-68.427-99.796 0-168.459 68.427-68.663 68.428-68.663 175.746 0 73.392 58.402 161.783Q359.674-302.783 480-192.457Zm-.057 92.153q-14.9 0-29.758-5.239-14.858-5.239-26.533-15.718-66.435-60.717-117.391-117.956-50.957-57.239-85.055-111.218-34.097-53.978-51.717-104.554-17.62-50.576-17.62-97.968 0-153.28 98.952-244.227T480-888.131q130.227 0 229.179 90.947t98.952 244.227q0 47.392-17.62 97.968t-51.717 104.554q-34.098 53.979-85.055 111.218-50.956 57.239-117.391 117.956-11.707 10.479-26.606 15.718-14.9 5.239-29.799 5.239ZM480-560Zm0 82.391q34.196 0 58.294-24.097 24.097-24.098 24.097-58.294t-24.097-58.294Q514.196-642.391 480-642.391t-58.294 24.097Q397.609-594.196 397.609-560t24.097 58.294q24.098 24.097 58.294 24.097Z"/>
+        </svg>
+    `;
+
+    class Typeahead {
+        constructor() {
+            this._options = Object.assign({}, cloneObj(defaultOptions));
+            this._el = null;
+            this._query = '';
+            this._minQueryLength = 3;
+            this._historyData = [];
+            this._sections = ['venues', 'places', 'history', 'google', 'geonames'];
+            this._sources = {
+                geonames: {
+                    url: '/hcediting/ajax/autocomplete/geonames',
+                    cb: this._handleGeonames.bind(this),
+                    controller: null,
+                },
+                google: {
+                    url: null,
+                    cb: this._handleGoogle.bind(this),
+                    controller: null,
+                },
+                places: {
+                    url: '/ajax/autocomplete/places',
+                    cb: this._handlePlaces.bind(this),
+                    controller: null,
+                },
+                users: {
+                    url: '/ajax/autocomplete/users',
+                    cb: this._handleUsers.bind(this),
+                    controller: null,
+                },
+                venues: {
+                    url: '/ajax/autocomplete/venues',
+                    cb: this._handleVenues.bind(this),
+                    controller: null,
+                },
+            };
+            this._localStorageManager = new HappycowLocalStorageManager();
+        }
+
+        init(selector, options = {}) {
+            this._el = document.querySelector(selector);
+            if (!this._el) return;
+
+            if (options) {
+                this._options = deepMerge(this._options, options);
+            }
+
+            this._historyData = this._getHistoryData();
+
+            const containerEl = document.createElement('div');
+            containerEl.classList.add(`${this._el.id}-typeahead-container`, 'relative', 'inline-block', 'w-full');
+            wrap(this._el, containerEl);
+            appendContent(containerEl, listboxTemplate(`${this._el.id}-autcomplete`));
+            this._el.classList.add('relative', 'align-top', 'z-9');
+
+            const listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+            if (!listboxEl) return;
+
+            if (this._options.containerItemTemplate) {
+                const template = listboxContainerTemplate(`${this._el.id}-template-autocomplete`, this._options.containerItemTemplate, 'order-0');
+                appendContent(listboxEl, template);
+            }
+
+            if (this._options.listboxCss.length > 0) {
+                this._options.listboxCss.forEach((cssClass) => {
+                    listboxEl.classList.add(cssClass);
+                });
+            }
+
+            this._events(selector);
+        }
+
+        close(selector) {
+            const activeEl = selector ? document.querySelector(selector) : this._el;
+            if (!activeEl) return;
+
+            const listboxEl = getNextSibling(activeEl, SELECTOR_TYPEAHAED_LISTBOX);
+            if (!listboxEl) return;
+
+            listboxEl.classList.add(CLASS_NAME_HIDDEN);
+            activeEl.blur();
+        }
+
+        saveQuery(obj) {
+            const localData = this._localStorageManager.getItem('searchHistory');
+            const newDataToStore = this._getObjData(obj);
+
+            if (newDataToStore === null) return;
+
+            if (localData === null) {
+                const selections = [];
+                selections.unshift(newDataToStore);
+                this._localStorageManager.setItem('searchHistory', selections);
+                return;
+            }
+
+            if (this._itemExists(localData, newDataToStore)) return;
+
+            if (localData.length < 10) {
+                localData.unshift(newDataToStore);
+                this._localStorageManager.setItem('searchHistory', localData);
+                return;
+            }
+
+            localData.pop();
+            localData.unshift(newDataToStore);
+            this._localStorageManager.setItem('searchHistory', localData);
+        }
+
+        _getObjValue(obj) {
+            if (obj.location) return obj.location;
+            if (obj.venue) return obj.venue;
+            return '';
+        }
+
+        _getObjData(obj) {
+            if (obj.location || obj.venue) return obj;
+            return null;
+        }
+
+        _getHistoryData() {
+            const data = this._localStorageManager.getItem('searchHistory');
+            if (data !== null) return data;
+            return [];
+        }
+
+        _events(selector) {
+            addOnEventListener(
+                'keyup',
+                selector,
+                debounce((e) => {
+                    if (this._options.containerItemTemplate) {
+                        const listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+                        listboxEl.classList.remove(CLASS_NAME_HIDDEN);
+                    }
+                    const { key } = e;
+                    if (key) {
+                        const code = key.toUpperCase();
+                        if (code === 'ARROWLEFT' || code === 'ARROWUP' || code === 'ARROWRIGHT' || code === 'ARROWDOWN') {
+                            return;
+                        }
+                    }
+                    this._cleanUp();
+                    if (this._el.value.length < this._minQueryLength) return;
+                    this._query = this._el.value;
+                    if (this._options.history && this._options.history.display) {
+                        this._displayHistory();
+                    }
+                    const sources = this._options.sources;
+                    if (sources) {
+                        for (const source in sources) {
+                            if (source && sources[source].display) {
+                                if (source === 'google') {
+                                    this._setupGoogle(this._sources[source], this._query);
+                                    continue;
+                                }
+                                this._setupSource(this._sources[source], this._query);
+                            }
+                        }
+                    }
+                }, KEY_UP_DEBOUNCE_TIMEOUT)
+            );
+
+            addLiveEventListener('click', `.${this._el.id}-typeahead-container ${SELECTOR_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION}`, (e) => {
+                e.preventDefault();
+                this.saveQuery(JSON.parse(e.target.dataset.obj));
+                if (this._options.selected) {
+                    this._options.selected(JSON.parse(e.target.dataset.obj));
+                }
+            });
+
+            document.addEventListener(
+                'click',
+                (e) => {
+                    const listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+                    if (!listboxEl) return;
+                    const { target } = e;
+                    if (target == this._el && listboxEl.childElementCount > 0) {
+                        listboxEl.classList.remove(CLASS_NAME_HIDDEN);
+                        return;
+                    }
+                    if (
+                        target.classList.contains(CLASS_NAME_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION) ||
+                        (target.parentElement && target.parentElement.classList.contains(CLASS_NAME_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION))
+                    ) {
+                        listboxEl.classList.add(CLASS_NAME_HIDDEN);
+                        return;
+                    }
+
+                    if (!target.closest(CLASS_NAME_TYPEAHEAD_LISTBOX)) {
+                        listboxEl.classList.add(CLASS_NAME_HIDDEN);
+                        return;
+                    }
+                    if (target.closest(CLASS_NAME_TYPEAHEAD_LISTBOX) == listboxEl && listboxEl.childElementCount > 0) {
+                        listboxEl.classList.remove(CLASS_NAME_HIDDEN);
+                    }
+                },
+                false
+            );
+        }
+
+        _setupGoogle(item, querySource) {
+            const service = new google.maps.places.AutocompleteService();
+            service.getPlacePredictions(
+                {
+                    input: querySource,
+                    types: ['establishment'],
+                    sessionToken: sessionToken,
+                },
+                (predictions, status) => {
+                    if (status == google.maps.places.PlacesServiceStatus.OK) {
+                        const data = predictions.map((value, index) => {
+                            return {
+                                place: value.description,
+                                placeId: value.place_id,
+                            };
+                        });
+                        item.cb(data);
+                    }
+                }
+            );
+        }
+
+        _setupSource(item, querySource) {
+            const urlParams = new URLSearchParams();
+            urlParams.set('q', querySource);
+
+            if (item.controller) item.controller.abort();
+            item.controller = new AbortController();
+
+            const { signal } = item.controller;
+            get(`${item.url}?${urlParams.toString()}`, { target: false, signal })
+                .then((data) => {
+                    item.controller = null;
+                    item.cb(data);
+                })
+                .catch((error) => {
+                    HappycowErrorReporter.logError({ error }, false);
+                });
+        }
+
+        _setupSourceListbox(type, order = '0') {
+            const listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+            if (!listboxEl) return false;
+
+            const listboxContainer = listboxContainerTemplate(`${this._el.id}-${type}-autocomplete`, '', `order-${order}`);
+            appendContent(listboxEl, listboxContainer);
+
+            const sourceType = this._options.sources[type];
+            if (sourceType.displayHeader) {
+                const headerTemplate = listboxHeaderTemplate(sourceType.headerTitle, sourceType.headerMarginTopCss);
+                appendContent(listboxEl.lastChild, headerTemplate);
+            }
+
+            listboxEl.classList.remove(CLASS_NAME_HIDDEN);
+            return listboxEl;
+        }
+
+        _cleanUp() {
+            this._sections.forEach((item) => {
+                deleteElement(`#${this._el.id}-${item}-autocomplete`);
+            });
+            const listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+            if (listboxEl && listboxEl.childElementCount === 0) {
+                listboxEl.classList.add(CLASS_NAME_HIDDEN);
+            }
+        }
+
+        _itemExists(listData, item) {
+            return (
+                (item.venue &&
+                    listData.find((o) => {
+                        return o.venue === item.venue;
+                    })) ||
+                (item.location &&
+                    listData.find((o) => {
+                        return o.location === item.location;
+                    }))
+            );
+        }
+
+        _displayHistory() {
+            if (!this._options.history.display) return;
+
+            deleteElement(`#${this._el.id}-history-autocomplete`);
+
+            if (!this._historyData || this._historyData.length === 0) return;
+
+            const historyData = this._historyData.filter((item) => {
+                const escapeQuery = this._query.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
+                const re = new RegExp(escapeQuery, 'gi');
+                return re.test(this._getObjValue(item));
+            });
+
+            if (historyData.length === 0) return;
+
+            let listboxEl = getNextSibling(this._el, SELECTOR_TYPEAHAED_LISTBOX);
+            if (!listboxEl) return;
+
+            const firstListboxContainer = listboxEl.querySelector(`div:not(#${this._el.id}-template-autocomplete)`);
+            if (firstListboxContainer) {
+                listboxEl = firstListboxContainer.parentElement;
+            }
+
+            const historyOptions = this._options.history;
+            const listboxContainer = listboxContainerTemplate(`${this._el.id}-history-autocomplete`, '', `order-${historyOptions.displayOrder}`);
+            appendContent(listboxEl, listboxContainer);
+
+            if (historyOptions.displayHeader) {
+                const headerTemplate = listboxHeaderTemplate(historyOptions.headerTitle, historyOptions.headerMarginTopCss);
+                appendContent(listboxEl.lastChild, headerTemplate);
+            }
+
+            listboxEl.classList.remove(CLASS_NAME_HIDDEN);
+
+            const dataLength = historyData.length;
+            const dataLimit = historyOptions.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = historyData[i];
+                let itemTemplate;
+
+                if (item.city) {
+                    itemTemplate = listboxItemTemplate(`${iconLocationTemplate} ${this._getObjValue(item)}`);
+                    this._insertListboxItem(listboxEl, item, itemTemplate);
+                    continue;
+                }
+
+                if (item.friend) {
+                    itemTemplate = listboxItemTemplate(`${iconFriendTemplate} ${item.venue}`);
+                    this._insertListboxItem(listboxEl, item, itemTemplate);
+                    continue;
+                }
+
+                itemTemplate = listboxItemTemplate(`${this._getObjValue(item)}`);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _handleGeonames(data) {
+            deleteElement(`#${this._el.id}-geonames-autocomplete`);
+
+            const { results } = data;
+            if (!results || results.length === 0) return;
+
+            const listboxEl = this._setupSourceListbox('geonames', this._options.sources.geonames.displayOrder);
+            if (!listboxEl) return;
+
+            const dataLength = results.length;
+            const dataLimit = this._options.sources.geonames.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = results[i];
+                const itemTemplate = listboxItemTemplate(`${item.name}, ${item.admin1}, ${item.country}`);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _handleUsers(data) {
+            deleteElement(`#${this._el.id}-users-autocomplete`);
+
+            const { results } = data;
+            if (!results || results.length === 0) return;
+
+            const listboxEl = this._setupSourceListbox('users', this._options.sources.users.displayOrder);
+            if (!listboxEl) return;
+
+            const dataLength = results.length;
+            const dataLimit = this._options.sources.users.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = results[i];
+                const itemTemplate = listboxItemTemplate(item.username);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _handleVenues(data) {
+            deleteElement(`#${this._el.id}-venues-autocomplete`);
+
+            const { results } = data;
+            if (!results || results.length === 0) return;
+
+            const listboxEl = this._setupSourceListbox('venues', this._options.sources.venues.displayOrder);
+            if (!listboxEl) return;
+
+            const dataLength = results.length;
+            const dataLimit = this._options.sources.venues.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = results[i];
+                let itemTemplate;
+
+                if (this._options.sources.venues.customItemTemplate) {
+                    itemTemplate = this._options.sources.venues.customItemTemplate(item);
+                    this._insertListboxItem(listboxEl, item, itemTemplate);
+                    continue;
+                }
+
+                if (item.friend) {
+                    itemTemplate = listboxItemTemplate(`${iconFriendTemplate} ${item.venue}`);
+                    this._insertListboxItem(listboxEl, item, itemTemplate);
+                    continue;
+                }
+
+                itemTemplate = listboxItemTemplate(`${iconLocationTemplate} ${item.venue}`);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _handleGoogle(data) {
+            deleteElement(`#${this._el.id}-google-autocomplete`);
+
+            if (!data || data.length === 0) return;
+
+            const listboxEl = this._setupSourceListbox('google', this._options.sources.google.displayOrder);
+            if (!listboxEl) return;
+
+            const dataLength = data.length;
+            const dataLimit = this._options.sources.google.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = data[i];
+                const itemTemplate = listboxItemTemplate(item.place);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _handlePlaces(data) {
+            deleteElement(`#${this._el.id}-places-autocomplete`);
+
+            let { results } = data;
+
+            results = results.filter((item) => {
+                if (item.location) return true;
+                return false;
+            });
+
+            if (!results || results.length === 0) return;
+
+            const listboxEl = this._setupSourceListbox('places', this._options.sources.places.displayOrder);
+            if (!listboxEl) return;
+
+            const dataLength = results.length;
+            const dataLimit = this._options.sources.places.displayItemsLimit;
+            for (let i = 0; i < dataLength && i < dataLimit; i++) {
+                const item = results[i];
+                const itemTemplate = listboxItemTemplate(`${iconLocationTemplate} ${item.location}`);
+                this._insertListboxItem(listboxEl, item, itemTemplate);
+            }
+        }
+
+        _insertListboxItem(listboxEl, itemData, itemTemplate) {
+            const listboxLastChildEl = listboxEl.lastChild;
+            if (!listboxLastChildEl) return false;
+            appendContent(listboxLastChildEl, itemTemplate);
+
+            const listboxLastItemEl = listboxEl.lastChild.querySelector(`${SELECTOR_TYPEAHEAD_AUTOCOMPLETE_SUGGESTION}:last-child`);
+            if (listboxLastItemEl) {
+                listboxLastItemEl.dataset.obj = JSON.stringify(itemData);
+            }
+        }
+    }
+
+    return Typeahead;
+})();

@@ -1,0 +1,81 @@
+/*
+ * Copyright (C) HappyCow - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+var HappycowTabs = (function () {
+    const ATTRIUBTE_DATA_TRIGGER = '[data-trigger="tab"]';
+
+    const CLASS_NAME_ACTIVE = UI_CONSTANTS.stateActive;
+    const CLASS_NAME_HIDDEN = UI_CONSTANTS.displayHidden;
+
+    const SELECTOR_NAV_TAB = '.nav-tabs';
+    const SELECOTR_TAB_CONTENT = '.tab-content';
+
+    class Tabs {
+        constructor() {
+            this._tab = SELECTOR_NAV_TAB;
+            this._tabContent = SELECOTR_TAB_CONTENT;
+            this._tabTrigger = ATTRIUBTE_DATA_TRIGGER;
+        }
+
+        init() {
+            if (document.querySelectorAll(this._tabTrigger).length < 1) {
+                return;
+            }
+            this._events();
+        }
+
+        setActiveTab(tabTrigger) {
+            const tabTarget = isElement(tabTrigger) ? tabTrigger : document.querySelector(tabTrigger);
+            if (!tabTarget) return;
+
+            const ref = tabTarget.getAttribute('href');
+            if (!ref) return;
+
+            const tab = document.querySelector(ref);
+            if (!tab) return;
+
+            this._setNavItem(tabTarget);
+            this._setTabContent(tab);
+
+            dispatchCustomEvent(tabTarget, 'shown.hc.tab', tabTarget);
+        }
+
+        _events() {
+            addLiveEventListener('click', this._tabTrigger, (e) => {
+                e.preventDefault();
+                this.setActiveTab(e.target);
+            });
+        }
+
+        _setNavItem(target) {
+            target
+                .closest(this._tab)
+                .querySelectorAll('.nav-item')
+                .forEach((navItem) => {
+                    navItem.classList.remove(CLASS_NAME_ACTIVE);
+                });
+
+            target.parentElement.classList.add(CLASS_NAME_ACTIVE);
+        }
+
+        _setTabContent(target) {
+            target
+                .closest(this._tabContent)
+                .querySelectorAll('.tab-pane')
+                .forEach((tabItem) => {
+                    if (tabItem.closest(this._tabContent).id.toLowerCase() === target.closest(this._tabContent).id.toLowerCase()) {
+                        tabItem.classList.add(CLASS_NAME_HIDDEN);
+                        tabItem.classList.remove(CLASS_NAME_ACTIVE);
+                    }
+                });
+
+            target.classList.remove(CLASS_NAME_HIDDEN);
+            target.classList.add(CLASS_NAME_ACTIVE);
+        }
+    }
+
+    return Tabs;
+})();
