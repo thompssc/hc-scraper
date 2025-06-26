@@ -61,11 +61,18 @@ class HappyCowScraper:
             logger.error(f"Error extracting city path: {e}")
             return None
     
-    def scrape_city_ajax(self, city_path):
+    def scrape_city_ajax(self, city_url):
         """Scrape city using AJAX endpoint"""
         try:
-            # Convert path format for AJAX call
-            ajax_path = city_path.replace('|', '%7C')
+            # Extract path from actual HappyCow URL
+            # https://www.happycow.net/north_america/usa/california/los_angeles/ -> north_america/usa/california/los_angeles
+            if city_url.startswith('https://www.happycow.net/'):
+                path_part = city_url.replace('https://www.happycow.net/', '').strip('/')
+                ajax_path = path_part.replace('/', '%7C')
+            else:
+                # Fallback: assume it's already a path
+                ajax_path = city_url.replace('|', '%7C').replace('/', '%7C')
+            
             ajax_url = f"https://www.happycow.net/ajax/views/city/venues/{ajax_path}"
             
             logger.info(f"Calling AJAX endpoint: {ajax_url}")
@@ -84,7 +91,7 @@ class HappyCowScraper:
                 raise Exception("No HTML content in AJAX response")
             
             # Parse restaurants from HTML
-            restaurants = self.parse_restaurants_from_html(html_content, city_path)
+            restaurants = self.parse_restaurants_from_html(html_content, city_url)
             
             return {
                 'success': True,
@@ -297,11 +304,8 @@ def scrape_city():
                     'error': 'Could not extract city path from URL'
                 }), 400
         
-        # Convert path format if needed
-        city_path = full_path.replace('/', '|')
-        
-        # Scrape the city
-        result = scraper.scrape_city_ajax(city_path)
+        # Scrape the city using the actual URL
+        result = scraper.scrape_city_ajax(city_url)
         
         # Add timing and context
         duration = int(time.time() - start_time)
